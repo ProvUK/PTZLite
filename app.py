@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Version: 1.9
+# Version: 2.1
 # Updated: 2026-04-29
 # v1.0 - 2026-04-28 - Initial stable release: go2rtc streaming, PTZ click-to-centre,
 #                     sequential pan+tilt, optical zoom, presets, serialized NVR API
@@ -14,6 +14,8 @@
 # v1.7 - 2026-04-29 - Add joystick PTZ: POST /ptz/{id}/start and /ptz/{id}/stop endpoints
 # v1.8 - 2026-04-29 - Add ONVIF WS-Discovery: GET /api/discover scans LAN for cameras
 # v1.9 - 2026-04-29 - Restart go2rtc on camera add/update/delete instead of using unreliable PUT API
+# v2.0 - 2026-04-29 - Grid layouts (1x1/2x1/2x2) with pagination and per-camera fullscreen
+# v2.1 - 2026-04-29 - System tray icon (no CMD window); PyInstaller path handling; build.bat
 """
 Reolink camera viewer with click-to-pan PTZ control.
 
@@ -36,8 +38,11 @@ import re
 import socket
 import subprocess
 import sys
+import threading
 import time
+import urllib.request
 import uuid
+import webbrowser
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -48,10 +53,20 @@ from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-BASE = Path(__file__).parent
+# When frozen by PyInstaller: user files (config, go2rtc) live next to the .exe;
+# bundled resources (static/) are extracted to sys._MEIPASS at runtime.
+if getattr(sys, 'frozen', False):
+    _USER_DIR   = Path(sys.executable).parent
+    _BUNDLE_DIR = Path(sys._MEIPASS)        # type: ignore[attr-defined]
+else:
+    _USER_DIR   = Path(__file__).parent
+    _BUNDLE_DIR = Path(__file__).parent
+
+BASE        = _USER_DIR
 CONFIG_PATH = BASE / "config.yaml"
-GO2RTC_BIN = BASE / "go2rtc.exe"
+GO2RTC_BIN  = BASE / "go2rtc.exe"
 GO2RTC_PORT = 1984
+_STATIC_DIR = _BUNDLE_DIR / "static"
 
 app = FastAPI(title="Reolink Viewer")
 
@@ -80,8 +95,7 @@ def _rtsp_url(cam: dict, stream: str | None = None) -> str:
 
 def _copy_go2rtc_js():
     """Download video-stream.js from go2rtc into static/ so we can serve it same-origin."""
-    import urllib.request
-    static = BASE / "static"
+    static = _STATIC_DIR
     for fname in ("video-stream.js", "video-rtc.js"):
         try:
             url = f"http://localhost:{GO2RTC_PORT}/{fname}"
@@ -125,7 +139,6 @@ def start_go2rtc():
     )
     atexit.register(stop_go2rtc)
 
-    import urllib.request
     for _ in range(20):
         try:
             urllib.request.urlopen(f"http://localhost:{GO2RTC_PORT}/api/streams", timeout=1)
@@ -489,7 +502,6 @@ def _reload_go2rtc():
 
     _go2rtc_proc = subprocess.Popen([str(GO2RTC_BIN), "-config", str(cfg_file)])
 
-    import urllib.request
     for _ in range(20):
         try:
             urllib.request.urlopen(f"http://localhost:{GO2RTC_PORT}/api/streams", timeout=1)
@@ -644,7 +656,70 @@ async def api_discover():
 
 # ── Static files ───────────────────────────────────────────────────────────────
 
-app.mount("/", StaticFiles(directory=BASE / "static", html=True), name="static")
+app.mount("/", StaticFiles(directory=_STATIC_DIR, html=True), name="static")
+
+# ── System tray ────────────────────────────────────────────────────────────────
+
+def _make_tray_icon():
+    from PIL import Image, ImageDraw
+    img = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    d.rectangle([4, 16, 60, 52], fill="#1e40af")        # camera body
+    d.rectangle([44, 8,  58, 18], fill="#1e40af")        # viewfinder bump
+    d.ellipse(  [16, 20, 48, 48], fill="#0f172a")        # lens outer
+    d.ellipse(  [22, 26, 42, 42], fill="#93c5fd")        # lens glass
+    d.ellipse(  [28, 32, 36, 36], fill="#0f172a")        # lens pupil
+    return img
+
+
+def _wait_for_server(port: int, timeout: float = 15.0) -> bool:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            urllib.request.urlopen(f"http://localhost:{port}/cameras", timeout=1)
+            return True
+        except Exception:
+            time.sleep(0.25)
+    return False
+
+
+def _run_uvicorn(port: int):
+    uvicorn.run(app, host="0.0.0.0", port=port, log_level="warning")
+
+
+def _main_tray(port: int):
+    import pystray
+
+    server = threading.Thread(target=_run_uvicorn, args=(port,), daemon=True)
+    server.start()
+    _wait_for_server(port)
+    webbrowser.open(f"http://localhost:{port}")
+
+    icon_img = _make_tray_icon()
+
+    def on_open(_icon, _item):
+        webbrowser.open(f"http://localhost:{port}")
+
+    def on_settings(_icon, _item):
+        webbrowser.open(f"http://localhost:{port}/settings.html")
+
+    def on_exit(icon, _item):
+        stop_go2rtc()
+        icon.stop()
+
+    tray = pystray.Icon(
+        "Reolink Viewer",
+        icon_img,
+        "Reolink Viewer",
+        menu=pystray.Menu(
+            pystray.MenuItem("Open Viewer",  on_open,     default=True),
+            pystray.MenuItem("Settings",     on_settings),
+            pystray.Menu.SEPARATOR,
+            pystray.MenuItem("Exit",         on_exit),
+        ),
+    )
+    tray.run()  # blocks until on_exit calls icon.stop()
+
 
 # ── Entry point ────────────────────────────────────────────────────────────────
 
@@ -657,7 +732,13 @@ def main():
     try:
         start_go2rtc()
         print(f"Reolink viewer → http://localhost:{port}")
-        uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")
+        try:
+            import pystray   # noqa: F401
+            from PIL import Image  # noqa: F401
+            _main_tray(port)
+        except ImportError:
+            # pystray / Pillow not installed — fall back to visible console
+            uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")
     except Exception as e:
         print(f"\nERROR: {e}")
         input("\nPress Enter to close...")
