@@ -1,0 +1,31 @@
+cameras:
+  - id: front_door          # unique slug used in URLs
+    name: Front Door        # display name in viewer
+    ip: 192.168.0.100       # camera or NVR IP
+    port: 443               # 443 for HTTPS, 80 for HTTP
+    username: admin
+    password: your_password_here
+    channel: 0              # 0 for single cameras; NVR channel index for multi-cam
+    stream: sub             # sub (low bandwidth) or main (full res)
+    playback: false         # true if camera records to an NVR/hub (enables jump-back)
+
+  # PTZ camera example
+  - id: garden_ptz
+    name: Garden PTZ
+    ip: 192.168.0.101
+    port: 443
+    username: admin
+    password: your_password_here
+    channel: 1
+    stream: sub
+    playback: true
+    ptz: true
+    fov_h: 90               # horizontal field of view in degrees
+    fov_v: 55               # vertical field of view in degrees
+    ptz_speed: 40           # 1-63
+    zoom_speed: 63          # 1-63
+    zoom_step_s: 0.3        # seconds per zoom tick
+    ptz_degrees_per_second: 20
+    monitor_preset: 0       # preset ID to return to (omit or null for none)
+    pan_invert: false
+    tilt_invert: false

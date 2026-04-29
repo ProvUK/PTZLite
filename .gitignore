@@ -4,3 +4,7 @@ __pycache__/
 go2rtc.exe
 go2rtc_generated.yaml
 go2rtc_debug.yaml
+config.yaml
+dist/
+build/
+*.spec
