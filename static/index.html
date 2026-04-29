@@ -4,7 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Reolink Viewer</title>
-  <script type="module" src="/video-stream.js"></script>
+  <script type="module">
+    import { VideoRTC } from '/video-rtc.js';
+    customElements.define('video-rtc', VideoRTC);
+  </script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -360,12 +363,10 @@ function buildCard(cam) {
   const wrap = document.createElement('div');
   wrap.className = 'cam-wrap';
 
-  // Prefer video-stream (go2rtc combined component) — fall back to video-rtc
-  const tagName = customElements.get('video-stream') ? 'video-stream' : 'video-rtc';
-  const vs = document.createElement(tagName);
+  const vs = document.createElement('video-rtc');
   vs.dataset.camId = cam.id;
-  vs.src = streamSrc(cam.id);
   wrap.appendChild(vs);
+  vs.src = streamSrc(cam.id);
 
   const label = document.createElement('div');
   label.className = 'cam-label';
@@ -443,12 +444,7 @@ async function buildPresetBar(cam, wrap) {
 }
 
 async function init() {
-  // Wait for video-stream (or video-rtc) custom element to register
-  await Promise.race([
-    customElements.whenDefined('video-stream'),
-    customElements.whenDefined('video-rtc'),
-  ]).catch(() => {});
-
+  await customElements.whenDefined('video-rtc');
   const cameras = await (await fetch('/cameras')).json();
   const n = cameras.length;
 

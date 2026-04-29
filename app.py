@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Version: 1.4
+# Version: 1.6
 # Updated: 2026-04-29
 # v1.0 - 2026-04-28 - Initial stable release: go2rtc streaming, PTZ click-to-centre,
 #                     sequential pan+tilt, optical zoom, presets, serialized NVR API
@@ -9,6 +9,8 @@
 # v1.3 - 2026-04-29 - Add WebRTC signalling proxy to fix CORS (browser→go2rtc cross-origin)
 # v1.4 - 2026-04-29 - Use go2rtc video-stream.js web component (MSE fallback for H.265);
 #                     register {id}_main + {id}_sub streams; add stream toggle support
+# v1.5 - 2026-04-29 - Add CSP middleware to allow unsafe-eval required by video-rtc.js
+# v1.6 - 2026-04-29 - Fix go2rtc cross-origin WebSocket rejection (add origin: * to API config)
 """
 Reolink camera viewer with click-to-pan PTZ control.
 
@@ -102,8 +104,8 @@ def start_go2rtc():
 
     go2rtc_cfg = {
         "streams": streams,
-        "api": {"listen": f":{GO2RTC_PORT}"},
-        "log": {"level": "debug"},
+        "api": {"listen": f":{GO2RTC_PORT}", "origin": "*"},
+        "log": {"level": "warn"},
         "rtsp": {"listen": ""},
     }
 
@@ -113,7 +115,6 @@ def start_go2rtc():
 
     _go2rtc_proc = subprocess.Popen(
         [str(GO2RTC_BIN), "-config", str(cfg_file)],
-        stdout=subprocess.DEVNULL,
     )
     atexit.register(stop_go2rtc)
 
