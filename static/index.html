@@ -222,6 +222,44 @@
       100% { background: rgba(0,0,0,.65); border-color: rgba(255,255,255,.15); color: #ddd; }
     }
 
+    /* Playback controls */
+    .pb-bar {
+      position: absolute;
+      bottom: 7px; right: 9px;
+      display: flex; gap: 4px; align-items: center;
+      z-index: 11;
+      pointer-events: none;
+    }
+    .pb-btn {
+      background: rgba(0,0,0,.65);
+      backdrop-filter: blur(4px);
+      color: #ddd;
+      font-size: 0.65rem; font-weight: 600; letter-spacing: 0.04em;
+      padding: 3px 9px;
+      border: 1px solid rgba(255,255,255,.15);
+      border-radius: 4px;
+      cursor: pointer;
+      pointer-events: all;
+      white-space: nowrap;
+      transition: background 0.15s, color 0.15s;
+    }
+    .pb-btn:hover:not(:disabled) { background: rgba(37,99,235,.85); color: #fff; border-color: #2563eb; }
+    .pb-btn:disabled { opacity: 0.4; cursor: default; }
+    .pb-live {
+      border-color: rgba(239,68,68,.4); color: #fca5a5;
+      display: none;
+    }
+    .pb-live:hover:not(:disabled) { background: rgba(239,68,68,.7); color: #fff; border-color: #ef4444; }
+    .pb-err { border-color: rgba(234,179,8,.4); color: #fde047; display: none; }
+
+    /* Native video overlay shown during playback */
+    .pb-video {
+      position: absolute; inset: 0;
+      width: 100%; height: 100%;
+      background: #000;
+      z-index: 10;
+    }
+
     .joystick-ring {
       position: absolute;
       width: 120px; height: 120px;
@@ -540,6 +578,88 @@ function handleScroll(e, overlay, vsEl, camId) {
   else applyDigitalZoom(e, overlay, vsEl, camId);
 }
 
+// ── Playback ──────────────────────────────────────────────────────────────────
+
+function buildPlaybackBar(camId, wrap) {
+  const bar = document.createElement('div');
+  bar.className = 'pb-bar';
+
+  const errMsg = document.createElement('span');
+  errMsg.className = 'pb-btn pb-err';
+  errMsg.textContent = 'No recording';
+  bar.appendChild(errMsg);
+
+  const liveBtn = document.createElement('button');
+  liveBtn.className = 'pb-btn pb-live';
+  liveBtn.textContent = '● Live';
+  liveBtn.addEventListener('click', e => { e.stopPropagation(); goLive(camId, wrap); });
+  bar.appendChild(liveBtn);
+
+  for (const mins of [1, 5]) {
+    const btn = document.createElement('button');
+    btn.className = 'pb-btn';
+    btn.textContent = `⏮ ${mins}m`;
+    btn.title = `Jump back ${mins} minute${mins > 1 ? 's' : ''}`;
+    btn.addEventListener('click', e => { e.stopPropagation(); jumpBack(camId, wrap, mins); });
+    bar.appendChild(btn);
+  }
+
+  wrap.appendChild(bar);
+}
+
+async function jumpBack(camId, wrap, minutes) {
+  const bar    = wrap.querySelector('.pb-bar');
+  const errMsg = bar.querySelector('.pb-err');
+  const liveBtn = bar.querySelector('.pb-live');
+  const btns   = bar.querySelectorAll('.pb-btn:not(.pb-live):not(.pb-err)');
+
+  btns.forEach(b => b.disabled = true);
+  errMsg.style.display = 'none';
+
+  try {
+    const r = await fetch(`/api/playback/${camId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ minutes_ago: minutes }),
+    });
+    const data = await r.json();
+
+    if (!data.found) {
+      errMsg.style.display = '';
+      setTimeout(() => { errMsg.style.display = 'none'; }, 3000);
+      return;
+    }
+
+    // Remove any existing playback video
+    wrap.querySelector('.pb-video')?.remove();
+
+    const video = document.createElement('video');
+    video.className = 'pb-video';
+    video.controls = true;
+    video.src = `/api/playback/${camId}/stream?filename=${encodeURIComponent(data.filename)}`;
+    video.addEventListener('loadedmetadata', () => {
+      video.currentTime = data.seek_offset_s;
+      video.play().catch(() => {});
+    });
+    wrap.appendChild(video);
+    liveBtn.style.display = '';
+
+  } catch (err) {
+    console.error('Playback error:', err);
+    errMsg.textContent = 'Playback error';
+    errMsg.style.display = '';
+    setTimeout(() => { errMsg.style.display = 'none'; }, 3000);
+  } finally {
+    btns.forEach(b => b.disabled = false);
+  }
+}
+
+function goLive(camId, wrap) {
+  const video = wrap.querySelector('.pb-video');
+  if (video) { video.pause(); video.src = ''; video.remove(); }
+  wrap.querySelector('.pb-live').style.display = 'none';
+}
+
 // ── Build camera card ─────────────────────────────────────────────────────────
 
 const FS_ICON = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
@@ -572,6 +692,8 @@ function buildCard(cam) {
     else document.exitFullscreen();
   });
   wrap.appendChild(fsBtn);
+
+  if (cam.playback) buildPlaybackBar(cam.id, wrap);
 
   if (cam.ptz) {
     const badge = document.createElement('div');

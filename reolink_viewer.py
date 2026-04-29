@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Version: 2.1
+# Version: 2.2
 # Updated: 2026-04-29
 # v1.0 - 2026-04-28 - Initial stable release: go2rtc streaming, PTZ click-to-centre,
 #                     sequential pan+tilt, optical zoom, presets, serialized NVR API
@@ -16,6 +16,7 @@
 # v1.9 - 2026-04-29 - Restart go2rtc on camera add/update/delete instead of using unreliable PUT API
 # v2.0 - 2026-04-29 - Grid layouts (1x1/2x1/2x2) with pagination and per-camera fullscreen
 # v2.1 - 2026-04-29 - System tray icon (no CMD window); PyInstaller path handling; build.bat
+# v2.2 - 2026-04-29 - Playback: Search recordings + proxy download stream; per-camera opt-in
 """
 Reolink camera viewer with click-to-pan PTZ control.
 
@@ -33,6 +34,7 @@ go2rtc will be started automatically and stopped when the app exits.
 
 import asyncio
 import atexit
+import datetime
 import math
 import re
 import socket
@@ -50,6 +52,7 @@ import aiohttp
 import uvicorn
 import yaml
 from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -436,6 +439,7 @@ def list_cameras():
             "id": c["id"],
             "name": c["name"],
             "ptz": bool(c.get("ptz", False)),
+            "playback": bool(c.get("playback", False)),
             "monitor_preset": c.get("monitor_preset"),
             "go2rtc_port": GO2RTC_PORT,
         }
@@ -568,6 +572,156 @@ async def api_delete_camera(cam_id: str):
     _save_config()
     _preset_cache.pop(cam_id, None)
     await asyncio.get_event_loop().run_in_executor(None, _reload_go2rtc)
+
+
+# ── Playback ───────────────────────────────────────────────────────────────────
+
+def _dt_to_reolink(dt: datetime.datetime) -> dict:
+    return {"year": dt.year, "mon": dt.month, "day": dt.day,
+            "hour": dt.hour, "min": dt.minute, "sec": dt.second}
+
+
+def _reolink_to_epoch(d: dict) -> float:
+    return datetime.datetime(
+        d["year"], d["mon"], d["day"],
+        d["hour"], d.get("min", 0), d.get("sec", 0)
+    ).timestamp()
+
+
+async def _ensure_token(cam: dict) -> str:
+    """Return a valid cached token, logging in if needed."""
+    key = _nvr_key(cam)
+    lock = _get_nvr_lock(cam)
+    async with lock:
+        token, expires = _tokens.get(key, ("", 0.0))
+        if not token or time.time() >= expires - 60:
+            port = cam.get("port", 80)
+            scheme = "https" if port == 443 or cam.get("https") else "http"
+            data = await _post(
+                f"{scheme}://{cam['ip']}:{port}/api.cgi?cmd=Login",
+                [{"cmd": "Login", "action": 0, "param": {
+                    "User": {"userName": cam["username"], "password": cam["password"]}
+                }}]
+            )
+            token = data[0]["value"]["Token"]["name"]
+            lease = data[0]["value"]["Token"]["leaseTime"]
+            _tokens[key] = (token, time.time() + lease)
+        return token
+
+
+class PlaybackPayload(BaseModel):
+    minutes_ago: float = 5.0
+
+
+@app.post("/api/playback/{cam_id}")
+async def api_playback_find(cam_id: str, payload: PlaybackPayload):
+    """Search for the recording that covers (now - minutes_ago) and return seek info."""
+    cam = cameras.get(cam_id)
+    if not cam:
+        raise HTTPException(404, "Camera not found")
+    if not cam.get("playback"):
+        raise HTTPException(400, "Playback not enabled for this camera")
+
+    target_dt  = datetime.datetime.now() - datetime.timedelta(minutes=payload.minutes_ago)
+    search_start = target_dt - datetime.timedelta(minutes=30)
+    search_end   = target_dt + datetime.timedelta(minutes=5)
+
+    try:
+        data = await _nvr_call(cam, "Search", [{"cmd": "Search", "action": 0, "param": {
+            "Search": {
+                "channel":    cam.get("channel", 0),
+                "onlyStatus": 0,
+                "streamType": cam.get("stream", "main"),
+                "StartTime":  _dt_to_reolink(search_start),
+                "EndTime":    _dt_to_reolink(search_end),
+            }
+        }}])
+    except Exception as e:
+        raise HTTPException(502, f"Recording search failed: {e}")
+
+    try:
+        files = data[0]["value"]["SearchResult"]["File"]
+    except (KeyError, IndexError, TypeError):
+        return {"found": False, "reason": "no recordings in range"}
+
+    if not files:
+        return {"found": False, "reason": "no recordings in range"}
+
+    target_epoch = target_dt.timestamp()
+
+    # Prefer a file whose window contains the target time
+    best = next(
+        (f for f in files
+         if _reolink_to_epoch(f["StartTime"]) <= target_epoch <= _reolink_to_epoch(f["EndTime"])),
+        None
+    )
+    # Fall back to the most recent file ending before the target
+    if best is None:
+        before = [f for f in files if _reolink_to_epoch(f["EndTime"]) <= target_epoch]
+        best = max(before, key=lambda f: _reolink_to_epoch(f["EndTime"])) if before else None
+
+    if best is None:
+        return {"found": False, "reason": "no suitable recording found"}
+
+    start_epoch = _reolink_to_epoch(best["StartTime"])
+    seek_s = max(0.0, target_epoch - start_epoch)
+
+    return {
+        "found":       True,
+        "filename":    best["name"],
+        "seek_offset_s": round(seek_s),
+        "start_epoch": start_epoch,
+    }
+
+
+@app.get("/api/playback/{cam_id}/stream")
+async def api_playback_stream(cam_id: str, filename: str, request: Request):
+    """Proxy the recording file from the hub/NVR, supporting Range requests for seeking."""
+    cam = cameras.get(cam_id)
+    if not cam:
+        raise HTTPException(404, "Camera not found")
+
+    token = await _ensure_token(cam)
+    port   = cam.get("port", 80)
+    scheme = "https" if port == 443 or cam.get("https") else "http"
+    dl_url = (
+        f"{scheme}://{cam['ip']}:{port}/api.cgi"
+        f"?cmd=Download&token={token}"
+        f"&channel={cam.get('channel', 0)}&filename={filename}"
+    )
+
+    req_headers: dict[str, str] = {}
+    if rng := request.headers.get("range"):
+        req_headers["Range"] = rng
+
+    session = aiohttp.ClientSession()
+    try:
+        resp = await session.get(
+            dl_url, headers=req_headers, ssl=False,
+            timeout=aiohttp.ClientTimeout(total=None, connect=10),
+        )
+        resp_headers = {"Accept-Ranges": "bytes"}
+        for h in ("Content-Length", "Content-Range"):
+            if h in resp.headers:
+                resp_headers[h] = resp.headers[h]
+
+        async def _stream():
+            try:
+                async for chunk in resp.content.iter_chunked(65536):
+                    yield chunk
+            finally:
+                resp.release()
+                await session.close()
+
+        return StreamingResponse(
+            _stream(),
+            status_code=resp.status,
+            headers=resp_headers,
+            media_type=resp.content_type or "video/mp4",
+        )
+    except Exception as e:
+        await session.close()
+        raise HTTPException(502, f"Stream error: {e}")
 
 
 # ── ONVIF WS-Discovery ─────────────────────────────────────────────────────────

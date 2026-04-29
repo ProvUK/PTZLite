@@ -314,6 +314,17 @@
 
       <div class="form-section">
         <div class="check-row">
+          <input type="checkbox" id="f-playback">
+          <label for="f-playback">Supports playback / recording</label>
+        </div>
+        <p class="field-hint" style="margin-left:25px;margin-top:2px">
+          Enable for cameras attached to an NVR or hub that stores recordings locally.
+          Adds jump-back buttons in the viewer. Leave unchecked for standalone cameras with no recording.
+        </p>
+      </div>
+
+      <div class="form-section">
+        <div class="check-row">
           <input type="checkbox" id="f-ptz" onchange="togglePtz()">
           <label for="f-ptz">PTZ camera (pan / tilt / zoom)</label>
         </div>
@@ -423,6 +434,7 @@ function clearForm() {
   v('f-password').value = '';
   v('f-channel').value = '0';
   v('f-stream').value = 'sub';
+  v('f-playback').checked = false;
   v('f-ptz').checked = false;
   v('f-fov-h').value = '90';
   v('f-fov-v').value = '55';
@@ -445,6 +457,7 @@ function fillForm(cam) {
   v('f-password').value = cam.password ?? '';
   v('f-channel').value = cam.channel ?? 0;
   v('f-stream').value = cam.stream ?? 'sub';
+  v('f-playback').checked = !!cam.playback;
   v('f-ptz').checked = !!cam.ptz;
   v('f-fov-h').value = cam.fov_h ?? 90;
   v('f-fov-v').value = cam.fov_v ?? 55;
@@ -470,6 +483,7 @@ function formData() {
     password: v('f-password').value,
     channel:  parseInt(v('f-channel').value) || 0,
     stream:   v('f-stream').value,
+    playback: v('f-playback').checked,
     ptz:      ptz,
   };
   if (ptz) {
