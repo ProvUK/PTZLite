@@ -215,6 +215,30 @@
       0%   { background: rgba(220,38,38,.85); border-color: #dc2626; color: #fff; }
       100% { background: rgba(0,0,0,.65); border-color: rgba(255,255,255,.15); color: #ddd; }
     }
+
+    /* Joystick visual */
+    .joystick-ring {
+      position: absolute;
+      width: 120px;
+      height: 120px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      z-index: 6;
+      box-shadow: 0 0 0 1px rgba(0,0,0,0.25);
+    }
+    .joystick-knob {
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      background: rgba(255,255,255,0.85);
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      z-index: 7;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+    }
   </style>
 </head>
 <body>
@@ -261,6 +285,122 @@ document.getElementById('stream-btns').addEventListener('click', e => {
   const btn = e.target.closest('button[data-stream]');
   if (btn) setStream(btn.dataset.stream);
 });
+
+// ── PTZ Joystick ─────────────────────────────────────────────────────────────
+// Hold left mouse button and drag from the press point to steer the camera.
+// Distance from the press origin maps to speed; direction maps to pan/tilt.
+// Releasing stops the camera instantly. A tap (< 6px drag) falls through to
+// the existing click-to-pan behaviour.
+
+const JOYSTICK_MAX_PX  = 60;   // px from origin that equals full speed
+const JOYSTICK_DEAD_PX =  8;   // px — inner deadzone, no movement sent
+const JOYSTICK_CLICK_PX = 6;   // px — treat release as click if within this
+const JOYSTICK_RATE_MS  = 80;  // ms between direction-update API calls
+
+const _joysticks = {};  // camId → state
+
+function joystickStart(e, overlay, camId) {
+  if (e.button !== 0) return;
+  e.preventDefault();
+
+  const rect = overlay.getBoundingClientRect();
+  const ox = e.clientX - rect.left;
+  const oy = e.clientY - rect.top;
+
+  const ring = document.createElement('div');
+  ring.className = 'joystick-ring';
+  ring.style.left = `${ox}px`;
+  ring.style.top  = `${oy}px`;
+  overlay.appendChild(ring);
+
+  const knob = document.createElement('div');
+  knob.className = 'joystick-knob';
+  knob.style.left = `${ox}px`;
+  knob.style.top  = `${oy}px`;
+  overlay.appendChild(knob);
+
+  const state = {
+    active: true,
+    originX: e.clientX, originY: e.clientY,  // absolute coords
+    overlayLeft: rect.left, overlayTop: rect.top,
+    ox, oy,        // origin relative to overlay (for knob positioning)
+    ring, knob,
+    moved: false,
+    wasMoving: false,
+    lastX: 0, lastY: 0,
+    timer: null,
+    startEvent: e,
+  };
+  _joysticks[camId] = state;
+
+  // Use document-level handlers so dragging outside the overlay still works
+  function onMove(ev) { if (state.active) joystickMove(ev, state, camId); }
+  function onUp(ev)   {
+    document.removeEventListener('mousemove', onMove);
+    document.removeEventListener('mouseup',   onUp);
+    joystickEnd(ev, overlay, state, camId);
+  }
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup',   onUp);
+}
+
+function joystickMove(e, state, camId) {
+  const dx = e.clientX - state.originX;
+  const dy = e.clientY - state.originY;
+  const dist = Math.hypot(dx, dy);
+
+  if (dist > JOYSTICK_CLICK_PX) state.moved = true;
+
+  // Clamp knob to ring radius
+  const clamped = Math.min(dist, JOYSTICK_MAX_PX);
+  const angle   = Math.atan2(dy, dx);
+  state.knob.style.left = `${state.ox + Math.cos(angle) * clamped}px`;
+  state.knob.style.top  = `${state.oy + Math.sin(angle) * clamped}px`;
+
+  if (dist < JOYSTICK_DEAD_PX) {
+    state.lastX = 0;
+    state.lastY = 0;
+    if (state.wasMoving) {
+      state.wasMoving = false;
+      fetch(`/ptz/${camId}/stop`, { method: 'POST' }).catch(() => {});
+    }
+    return;
+  }
+
+  const mag  = clamped / JOYSTICK_MAX_PX;
+  state.lastX = Math.cos(angle) * mag;
+  state.lastY = Math.sin(angle) * mag;
+  state.wasMoving = true;
+
+  // Throttle: fire immediately on first move, then rate-limit
+  if (state.timer) return;
+  state.timer = setTimeout(() => {
+    state.timer = null;
+    if (state.active && state.wasMoving) {
+      fetch(`/ptz/${camId}/start`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ x: state.lastX, y: state.lastY }),
+      }).catch(() => {});
+    }
+  }, JOYSTICK_RATE_MS);
+}
+
+function joystickEnd(e, overlay, state, camId) {
+  state.active = false;
+  if (state.timer) { clearTimeout(state.timer); state.timer = null; }
+  state.ring.remove();
+  state.knob.remove();
+  delete _joysticks[camId];
+
+  if (!state.moved) {
+    // Tap with no drag → fall through to click-to-pan using the press position
+    handlePtzClick(state.startEvent, overlay, camId);
+    return;
+  }
+
+  fetch(`/ptz/${camId}/stop`, { method: 'POST' }).catch(() => {});
+}
 
 // ── PTZ ──────────────────────────────────────────────────────────────────────
 
@@ -386,7 +526,7 @@ function buildCard(cam) {
     const overlay = document.createElement('div');
     overlay.className = 'ptz-overlay';
     overlay.title = 'Click to pan / tilt';
-    overlay.addEventListener('click', e => handlePtzClick(e, overlay, cam.id));
+    overlay.addEventListener('mousedown', e => joystickStart(e, overlay, cam.id));
     overlay.addEventListener('wheel', e => handleScroll(e, overlay, vs, cam.id), { passive: false });
     overlay.addEventListener('contextmenu', e => e.preventDefault());
     wrap.appendChild(overlay);

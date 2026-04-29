@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Version: 1.6
+# Version: 1.7
 # Updated: 2026-04-29
 # v1.0 - 2026-04-28 - Initial stable release: go2rtc streaming, PTZ click-to-centre,
 #                     sequential pan+tilt, optical zoom, presets, serialized NVR API
@@ -11,6 +11,7 @@
 #                     register {id}_main + {id}_sub streams; add stream toggle support
 # v1.5 - 2026-04-29 - Add CSP middleware to allow unsafe-eval required by video-rtc.js
 # v1.6 - 2026-04-29 - Fix go2rtc cross-origin WebSocket rejection (add origin: * to API config)
+# v1.7 - 2026-04-29 - Add joystick PTZ: POST /ptz/{id}/start and /ptz/{id}/stop endpoints
 """
 Reolink camera viewer with click-to-pan PTZ control.
 
@@ -285,6 +286,50 @@ async def ptz_click(cam_id: str, click: ClickPayload):
         await _timed_axis(tilt_dir, abs(want_tilt))
 
     return {"ok": True, "mode": "timed"}
+
+# ── PTZ joystick ──────────────────────────────────────────────────────────────
+
+class JoystickPayload(BaseModel):
+    x: float  # -1.0 = full left,  +1.0 = full right
+    y: float  # -1.0 = full up,    +1.0 = full down (screen space)
+
+
+@app.post("/ptz/{cam_id}/start")
+async def ptz_joystick_start(cam_id: str, payload: JoystickPayload):
+    cam = cameras.get(cam_id)
+    if not cam or not cam.get("ptz"):
+        raise HTTPException(404, "Camera not found or not PTZ")
+
+    ax, ay = abs(payload.x), abs(payload.y)
+    if ax < 0.05 and ay < 0.05:
+        return {"ok": True, "note": "deadzone"}
+
+    sx = 1 if payload.x > 0 else -1
+    sy = 1 if payload.y > 0 else -1
+    if cam.get("pan_invert",  False): sx = -sx
+    if cam.get("tilt_invert", False): sy = -sy
+
+    # Dominant axis — NVR ignores tilt component in diagonal commands
+    if ax >= ay:
+        op, magnitude = ("Right" if sx > 0 else "Left"), ax
+    else:
+        op, magnitude = ("Down" if sy > 0 else "Up"), ay
+
+    speed = max(1, round(cam.get("ptz_speed", 20) * magnitude))
+    pc = _ptz_cam(cam)
+    await _nvr_call(pc, "PtzCtrl", [{"cmd": "PtzCtrl", "action": 0, "param": {
+        "channel": pc.get("channel", 0), "op": op, "speed": speed, "timeout": 0,
+    }}])
+    return {"ok": True, "op": op, "speed": speed}
+
+
+@app.post("/ptz/{cam_id}/stop")
+async def ptz_joystick_stop(cam_id: str):
+    cam = cameras.get(cam_id)
+    if not cam or not cam.get("ptz"):
+        raise HTTPException(404, "Camera not found or not PTZ")
+    await _ptz_stop(_ptz_cam(cam))
+    return {"ok": True}
 
 # ── Zoom control ───────────────────────────────────────────────────────────────
 
