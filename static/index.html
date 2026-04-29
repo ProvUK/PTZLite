@@ -81,10 +81,10 @@
       justify-content: center;
     }
 
-    .cam-wrap iframe {
+    .cam-wrap video {
       width: 100%;
       height: 100%;
-      border: none;
+      object-fit: contain;
       display: block;
       background: #000;
     }
@@ -228,8 +228,52 @@
 <div id="grid"></div>
 
 <script>
-// Video is served by go2rtc's own player embedded as an iframe.
-// We know this works — the PTZ overlay sits transparently on top.
+// ── WebRTC ────────────────────────────────────────────────────────────────────
+
+const _pcs = {};  // camId → RTCPeerConnection
+
+async function connectWebRTC(cam, videoEl) {
+  if (_pcs[cam.id]) {
+    _pcs[cam.id].close();
+    delete _pcs[cam.id];
+  }
+
+  const pc = new RTCPeerConnection({ iceServers: [] });
+  _pcs[cam.id] = pc;
+
+  pc.addTransceiver('video', { direction: 'recvonly' });
+  pc.addTransceiver('audio', { direction: 'recvonly' });
+
+  pc.ontrack = e => {
+    if (e.track.kind === 'video' && !videoEl.srcObject) {
+      videoEl.srcObject = e.streams[0];
+    }
+  };
+
+  pc.onconnectionstatechange = () => {
+    const s = pc.connectionState;
+    if ((s === 'failed' || s === 'disconnected') && _pcs[cam.id] === pc) {
+      setTimeout(() => connectWebRTC(cam, videoEl).catch(console.error), 2000);
+    }
+  };
+
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+
+  // Wait for ICE gathering — fast on LAN with no STUN servers
+  await new Promise(resolve => {
+    if (pc.iceGatheringState === 'complete') { resolve(); return; }
+    pc.onicegatheringstatechange = () => { if (pc.iceGatheringState === 'complete') resolve(); };
+    setTimeout(resolve, 3000);
+  });
+
+  const resp = await fetch(
+    `http://${location.hostname}:${cam.go2rtc_port}/api/webrtc?src=${cam.id}`,
+    { method: 'POST', body: pc.localDescription.sdp, headers: { 'Content-Type': 'application/sdp' } }
+  );
+  if (!resp.ok) throw new Error(`WebRTC offer rejected: ${resp.status}`);
+  await pc.setRemoteDescription({ type: 'answer', sdp: await resp.text() });
+}
 
 // ── PTZ ──────────────────────────────────────────────────────────────────────
 
@@ -242,20 +286,32 @@ function showRipple(overlay, x, y) {
   r.addEventListener('animationend', () => r.remove(), { once: true });
 }
 
-// ── Zoom ──────────────────────────────────────────────────────────────────────
+async function handlePtzClick(e, overlay, camId) {
+  const rect = overlay.getBoundingClientRect();
+  const x = (e.clientX - rect.left) / rect.width;
+  const y = (e.clientY - rect.top)  / rect.height;
+  showRipple(overlay, x, y);
+  try {
+    await fetch(`/ptz/${camId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ x, y }),
+    });
+  } catch (err) { console.error('PTZ error:', err); }
+}
+
+// ── Zoom ─────────────────────────────────────────────────────────────────────
 
 const _digitalZoom  = {};  // camId → {scale, tx, ty}
 const _opticalQueue = {};  // camId → {dir, steps, timer}
 
-// Plain scroll → digital zoom centred on the cursor position
-function applyDigitalZoom(e, overlay, iframe, camId) {
+function applyDigitalZoom(e, overlay, videoEl, camId) {
   const factor = e.deltaY < 0 ? 1.12 : (1 / 1.12);
   const state  = _digitalZoom[camId] || { scale: 1, tx: 0, ty: 0 };
   const next   = Math.max(1.0, Math.min(8.0, state.scale * factor));
   if (next === state.scale) return;
 
   const rect = overlay.getBoundingClientRect();
-  // Cursor offset from the container centre
   const cx = e.clientX - rect.left  - rect.width  / 2;
   const cy = e.clientY - rect.top   - rect.height / 2;
 
@@ -263,20 +319,16 @@ function applyDigitalZoom(e, overlay, iframe, camId) {
   let tx = cx * (1 - ratio) + state.tx * ratio;
   let ty = cy * (1 - ratio) + state.ty * ratio;
 
-  // Clamp: keep the scaled image fully within the container
   const maxX = (next - 1) * rect.width  / 2;
   const maxY = (next - 1) * rect.height / 2;
   tx = Math.max(-maxX, Math.min(maxX, tx));
   ty = Math.max(-maxY, Math.min(maxY, ty));
 
   _digitalZoom[camId] = { scale: next, tx, ty };
-  iframe.style.transformOrigin = 'center center';
-  iframe.style.transform = next === 1
-    ? ''
-    : `translate(${tx}px, ${ty}px) scale(${next})`;
+  videoEl.style.transformOrigin = 'center center';
+  videoEl.style.transform = next === 1 ? '' : `translate(${tx}px, ${ty}px) scale(${next})`;
 }
 
-// Right-click + scroll → optical zoom via camera API (debounced)
 function queueOpticalZoom(e, camId) {
   const dir = e.deltaY < 0 ? 1 : -1;
   if (!_opticalQueue[camId]) _opticalQueue[camId] = { dir, steps: 0, timer: null };
@@ -297,31 +349,10 @@ function queueOpticalZoom(e, camId) {
   }, 120);
 }
 
-function handleScroll(e, overlay, iframe, camId) {
+function handleScroll(e, overlay, videoEl, camId) {
   e.preventDefault();
-  if (e.buttons & 2) {
-    queueOpticalZoom(e, camId);
-  } else {
-    applyDigitalZoom(e, overlay, iframe, camId);
-  }
-}
-
-// ── PTZ ──────────────────────────────────────────────────────────────────────
-
-async function handlePtzClick(e, overlay, camId) {
-  const rect = overlay.getBoundingClientRect();
-  const x = (e.clientX - rect.left)  / rect.width;
-  const y = (e.clientY - rect.top)   / rect.height;
-  showRipple(overlay, x, y);
-  try {
-    await fetch(`/ptz/${camId}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ x, y }),
-    });
-  } catch (err) {
-    console.error('PTZ error:', err);
-  }
+  if (e.buttons & 2) queueOpticalZoom(e, camId);
+  else applyDigitalZoom(e, overlay, videoEl, camId);
 }
 
 // ── Layout ────────────────────────────────────────────────────────────────────
@@ -345,12 +376,22 @@ function buildCard(cam) {
   const wrap = document.createElement('div');
   wrap.className = 'cam-wrap';
 
-  // Embed go2rtc's own player — we know this works
-  const iframe = document.createElement('iframe');
-  iframe.src = `http://${location.hostname}:${cam.go2rtc_port}/stream.html?src=${cam.id}`;
-  iframe.allow = 'autoplay';
-  iframe.setAttribute('allowfullscreen', '');
-  wrap.appendChild(iframe);
+  const video = document.createElement('video');
+  video.autoplay = true;
+  video.muted = true;
+  video.playsInline = true;
+  wrap.appendChild(video);
+
+  const connecting = document.createElement('div');
+  connecting.className = 'connecting-msg';
+  connecting.textContent = 'Connecting…';
+  wrap.appendChild(connecting);
+  video.addEventListener('playing', () => connecting.remove(), { once: true });
+
+  connectWebRTC(cam, video).catch(err => {
+    console.error(`WebRTC ${cam.id}:`, err);
+    connecting.textContent = 'Stream unavailable';
+  });
 
   const label = document.createElement('div');
   label.className = 'cam-label';
@@ -371,11 +412,10 @@ function buildCard(cam) {
     overlay.className = 'ptz-overlay';
     overlay.title = 'Click to pan / tilt';
     overlay.addEventListener('click', e => handlePtzClick(e, overlay, cam.id));
-    overlay.addEventListener('wheel', e => handleScroll(e, overlay, iframe, cam.id), { passive: false });
+    overlay.addEventListener('wheel', e => handleScroll(e, overlay, video, cam.id), { passive: false });
     overlay.addEventListener('contextmenu', e => e.preventDefault());
     wrap.appendChild(overlay);
 
-    // Load presets asynchronously and add button bar
     buildPresetBar(cam, wrap);
   }
 
@@ -396,7 +436,7 @@ async function buildPresetBar(cam, wrap) {
       const r = await fetch(`/preset/${camId}/${presetId}`, { method: 'POST' });
       const data = await r.json();
       if (!data.ok) {
-        void btn.offsetWidth; // force reflow to restart animation
+        void btn.offsetWidth;
         btn.classList.add('failed');
         btn.addEventListener('animationend', () => btn.classList.remove('failed'), { once: true });
       }
@@ -432,8 +472,7 @@ async function init() {
   const cameras = await (await fetch('/cameras')).json();
   const n = cameras.length;
 
-  document.getElementById('cam-count').textContent =
-    `${n} camera${n !== 1 ? 's' : ''}`;
+  document.getElementById('cam-count').textContent = `${n} camera${n !== 1 ? 's' : ''}`;
 
   const layoutContainer = document.getElementById('layout-btns');
   LAYOUT_OPTS.forEach(cols => {
@@ -444,24 +483,24 @@ async function init() {
     layoutContainer.appendChild(btn);
   });
 
-  const cols = defaultCols(n);
-  applyLayout(cols);
+  applyLayout(defaultCols(n));
 
   const grid = document.getElementById('grid');
   cameras.forEach(cam => grid.appendChild(buildCard(cam)));
+
+  // On tab focus, reconnect any stalled streams
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) return;
+    cameras.forEach(cam => {
+      const video = document.querySelector(`#grid .cam-wrap:nth-child(${cameras.indexOf(cam) + 1}) video`);
+      if (video && (!video.srcObject || video.readyState === 0)) {
+        connectWebRTC(cam, video).catch(console.error);
+      }
+    });
+  });
 }
 
 init().catch(console.error);
-
-document.addEventListener('visibilitychange', () => {
-  if (!document.hidden) {
-    document.querySelectorAll('#grid iframe').forEach(iframe => {
-      const src = iframe.src;
-      iframe.src = '';
-      iframe.src = src;
-    });
-  }
-});
 </script>
 </body>
 </html>
