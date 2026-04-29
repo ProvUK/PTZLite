@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Reolink Viewer</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0d0d0d;
+      color: #e0e0e0;
+      font-family: system-ui, -apple-system, sans-serif;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 10px 18px;
+      background: #161616;
+      border-bottom: 1px solid #2a2a2a;
+      flex-shrink: 0;
+    }
+
+    header h1 { font-size: 1rem; font-weight: 600; letter-spacing: 0.02em; }
+    #cam-count { font-size: 0.78rem; color: #666; }
+
+    #layout-btns { margin-left: auto; display: flex; gap: 6px; }
+    #layout-btns button {
+      background: #222;
+      border: 1px solid #333;
+      color: #aaa;
+      border-radius: 4px;
+      padding: 4px 10px;
+      font-size: 0.75rem;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+    #layout-btns button:hover,
+    #layout-btns button.active {
+      background: #2563eb;
+      color: #fff;
+      border-color: #2563eb;
+    }
+
+    #settings-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 30px;
+      height: 30px;
+      background: #222;
+      border: 1px solid #333;
+      border-radius: 4px;
+      color: #aaa;
+      text-decoration: none;
+      transition: background 0.15s, color 0.15s;
+    }
+    #settings-btn:hover { background: #2563eb; color: #fff; border-color: #2563eb; }
+
+    #grid {
+      flex: 1;
+      display: grid;
+      gap: 3px;
+      padding: 3px;
+      overflow: hidden;
+    }
+
+    .cam-wrap {
+      position: relative;
+      background: #111;
+      border-radius: 4px;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .cam-wrap iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+      display: block;
+      background: #000;
+    }
+
+    .cam-label {
+      position: absolute;
+      top: 7px;
+      left: 9px;
+      background: rgba(0,0,0,.65);
+      backdrop-filter: blur(4px);
+      color: #eee;
+      font-size: 0.72rem;
+      font-weight: 500;
+      padding: 3px 8px;
+      border-radius: 4px;
+      pointer-events: none;
+      user-select: none;
+      z-index: 2;
+    }
+
+    .ptz-badge {
+      position: absolute;
+      top: 7px;
+      right: 9px;
+      background: #2563eb;
+      color: #fff;
+      font-size: 0.65rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      padding: 3px 7px;
+      border-radius: 4px;
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    /* Crosshair overlay — only on PTZ cameras */
+    .ptz-overlay {
+      position: absolute;
+      inset: 0;
+      cursor: crosshair;
+      z-index: 3;
+    }
+
+    /* Centre reticle */
+    .reticle {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 22px;
+      height: 22px;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+      z-index: 4;
+    }
+    .reticle::before, .reticle::after {
+      content: '';
+      position: absolute;
+      background: rgba(255,255,255,0.35);
+    }
+    .reticle::before { width: 1px; height: 100%; left: 50%; }
+    .reticle::after  { height: 1px; width: 100%; top: 50%; }
+
+    /* Click ripple */
+    .ripple {
+      position: absolute;
+      width: 36px;
+      height: 36px;
+      border: 2px solid rgba(255,255,255,0.9);
+      border-radius: 50%;
+      pointer-events: none;
+      transform: translate(-50%, -50%) scale(0.3);
+      animation: ripple-out 0.45s ease-out forwards;
+      z-index: 5;
+    }
+    @keyframes ripple-out {
+      to { transform: translate(-50%, -50%) scale(1.8); opacity: 0; }
+    }
+
+    /* Preset buttons */
+    .preset-bar {
+      position: absolute;
+      bottom: 7px;
+      left: 9px;
+      right: 9px;
+      display: flex;
+      gap: 4px;
+      flex-wrap: wrap;
+      z-index: 5;
+      pointer-events: none;
+    }
+    .preset-btn {
+      background: rgba(0,0,0,.65);
+      backdrop-filter: blur(4px);
+      color: #ddd;
+      font-size: 0.65rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      padding: 3px 9px;
+      border: 1px solid rgba(255,255,255,.15);
+      border-radius: 4px;
+      cursor: pointer;
+      pointer-events: all;
+      transition: background 0.15s, color 0.15s;
+      white-space: nowrap;
+    }
+    .preset-btn:hover { background: rgba(37,99,235,.85); color: #fff; border-color: #2563eb; }
+    .preset-btn.monitor { border-color: rgba(250,204,21,.4); color: #fcd34d; }
+    .preset-btn.monitor:hover { background: rgba(161,98,7,.85); border-color: #ca8a04; }
+    .preset-btn.failed {
+      animation: preset-fail 0.6s ease-out forwards;
+    }
+    @keyframes preset-fail {
+      0%   { background: rgba(220,38,38,.85); border-color: #dc2626; color: #fff; }
+      100% { background: rgba(0,0,0,.65); border-color: rgba(255,255,255,.15); color: #ddd; }
+    }
+
+    /* Connecting state */
+    .connecting-msg {
+      position: absolute;
+      color: #555;
+      font-size: 0.82rem;
+      pointer-events: none;
+      z-index: 1;
+      text-align: center;
+      padding: 8px;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Reolink Viewer</h1>
+  <span id="cam-count"></span>
+  <div id="layout-btns"></div>
+  <a href="/settings.html" id="settings-btn" title="Camera setup">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+    </svg>
+  </a>
+</header>
+<div id="grid"></div>
+
+<script>
+// Video is served by go2rtc's own player embedded as an iframe.
+// We know this works — the PTZ overlay sits transparently on top.
+
+// ── PTZ ──────────────────────────────────────────────────────────────────────
+
+function showRipple(overlay, x, y) {
+  const r = document.createElement('div');
+  r.className = 'ripple';
+  r.style.left = `${x * 100}%`;
+  r.style.top  = `${y * 100}%`;
+  overlay.appendChild(r);
+  r.addEventListener('animationend', () => r.remove(), { once: true });
+}
+
+// ── Zoom ──────────────────────────────────────────────────────────────────────
+
+const _digitalZoom  = {};  // camId → {scale, tx, ty}
+const _opticalQueue = {};  // camId → {dir, steps, timer}
+
+// Plain scroll → digital zoom centred on the cursor position
+function applyDigitalZoom(e, overlay, iframe, camId) {
+  const factor = e.deltaY < 0 ? 1.12 : (1 / 1.12);
+  const state  = _digitalZoom[camId] || { scale: 1, tx: 0, ty: 0 };
+  const next   = Math.max(1.0, Math.min(8.0, state.scale * factor));
+  if (next === state.scale) return;
+
+  const rect = overlay.getBoundingClientRect();
+  // Cursor offset from the container centre
+  const cx = e.clientX - rect.left  - rect.width  / 2;
+  const cy = e.clientY - rect.top   - rect.height / 2;
+
+  const ratio = next / state.scale;
+  let tx = cx * (1 - ratio) + state.tx * ratio;
+  let ty = cy * (1 - ratio) + state.ty * ratio;
+
+  // Clamp: keep the scaled image fully within the container
+  const maxX = (next - 1) * rect.width  / 2;
+  const maxY = (next - 1) * rect.height / 2;
+  tx = Math.max(-maxX, Math.min(maxX, tx));
+  ty = Math.max(-maxY, Math.min(maxY, ty));
+
+  _digitalZoom[camId] = { scale: next, tx, ty };
+  iframe.style.transformOrigin = 'center center';
+  iframe.style.transform = next === 1
+    ? ''
+    : `translate(${tx}px, ${ty}px) scale(${next})`;
+}
+
+// Right-click + scroll → optical zoom via camera API (debounced)
+function queueOpticalZoom(e, camId) {
+  const dir = e.deltaY < 0 ? 1 : -1;
+  if (!_opticalQueue[camId]) _opticalQueue[camId] = { dir, steps: 0, timer: null };
+  const q = _opticalQueue[camId];
+  if (q.dir !== dir) { q.dir = dir; q.steps = 0; }
+  q.steps++;
+  clearTimeout(q.timer);
+  q.timer = setTimeout(async () => {
+    const { dir, steps } = _opticalQueue[camId];
+    delete _opticalQueue[camId];
+    try {
+      await fetch(`/zoom/${camId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ direction: dir, steps }),
+      });
+    } catch (err) { console.error('Zoom error:', err); }
+  }, 120);
+}
+
+function handleScroll(e, overlay, iframe, camId) {
+  e.preventDefault();
+  if (e.buttons & 2) {
+    queueOpticalZoom(e, camId);
+  } else {
+    applyDigitalZoom(e, overlay, iframe, camId);
+  }
+}
+
+// ── PTZ ──────────────────────────────────────────────────────────────────────
+
+async function handlePtzClick(e, overlay, camId) {
+  const rect = overlay.getBoundingClientRect();
+  const x = (e.clientX - rect.left)  / rect.width;
+  const y = (e.clientY - rect.top)   / rect.height;
+  showRipple(overlay, x, y);
+  try {
+    await fetch(`/ptz/${camId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ x, y }),
+    });
+  } catch (err) {
+    console.error('PTZ error:', err);
+  }
+}
+
+// ── Layout ────────────────────────────────────────────────────────────────────
+
+const LAYOUT_OPTS = [1, 2, 3, 4];
+
+function applyLayout(cols) {
+  document.getElementById('grid').style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+  document.querySelectorAll('#layout-btns button').forEach(b => {
+    b.classList.toggle('active', +b.dataset.cols === cols);
+  });
+}
+
+function defaultCols(n) {
+  return n <= 1 ? 1 : n <= 4 ? 2 : n <= 9 ? 3 : 4;
+}
+
+// ── Build UI ──────────────────────────────────────────────────────────────────
+
+function buildCard(cam) {
+  const wrap = document.createElement('div');
+  wrap.className = 'cam-wrap';
+
+  // Embed go2rtc's own player — we know this works
+  const iframe = document.createElement('iframe');
+  iframe.src = `http://${location.hostname}:${cam.go2rtc_port}/stream.html?src=${cam.id}`;
+  iframe.allow = 'autoplay';
+  iframe.setAttribute('allowfullscreen', '');
+  wrap.appendChild(iframe);
+
+  const label = document.createElement('div');
+  label.className = 'cam-label';
+  label.textContent = cam.name;
+  wrap.appendChild(label);
+
+  if (cam.ptz) {
+    const badge = document.createElement('div');
+    badge.className = 'ptz-badge';
+    badge.textContent = 'PTZ';
+    wrap.appendChild(badge);
+
+    const reticle = document.createElement('div');
+    reticle.className = 'reticle';
+    wrap.appendChild(reticle);
+
+    const overlay = document.createElement('div');
+    overlay.className = 'ptz-overlay';
+    overlay.title = 'Click to pan / tilt';
+    overlay.addEventListener('click', e => handlePtzClick(e, overlay, cam.id));
+    overlay.addEventListener('wheel', e => handleScroll(e, overlay, iframe, cam.id), { passive: false });
+    overlay.addEventListener('contextmenu', e => e.preventDefault());
+    wrap.appendChild(overlay);
+
+    // Load presets asynchronously and add button bar
+    buildPresetBar(cam, wrap);
+  }
+
+  return wrap;
+}
+
+async function buildPresetBar(cam, wrap) {
+  const presets = await fetch(`/presets/${cam.id}`).then(r => r.json()).catch(() => []);
+  const first4  = presets.slice(0, 4);
+  if (first4.length === 0 && cam.monitor_preset == null) return;
+
+  const bar = document.createElement('div');
+  bar.className = 'preset-bar';
+
+  async function clickPreset(btn, camId, presetId) {
+    btn.classList.remove('failed');
+    try {
+      const r = await fetch(`/preset/${camId}/${presetId}`, { method: 'POST' });
+      const data = await r.json();
+      if (!data.ok) {
+        void btn.offsetWidth; // force reflow to restart animation
+        btn.classList.add('failed');
+        btn.addEventListener('animationend', () => btn.classList.remove('failed'), { once: true });
+      }
+    } catch (err) {
+      console.error('Preset error:', err);
+      btn.classList.add('failed');
+      btn.addEventListener('animationend', () => btn.classList.remove('failed'), { once: true });
+    }
+  }
+
+  first4.forEach(p => {
+    const btn = document.createElement('button');
+    btn.className = 'preset-btn';
+    btn.textContent = p.name;
+    btn.title = `Go to preset: ${p.name}`;
+    btn.addEventListener('click', e => { e.stopPropagation(); clickPreset(btn, cam.id, p.id); });
+    bar.appendChild(btn);
+  });
+
+  if (cam.monitor_preset != null) {
+    const btn = document.createElement('button');
+    btn.className = 'preset-btn monitor';
+    btn.textContent = 'Monitor';
+    btn.title = 'Return to monitor position';
+    btn.addEventListener('click', e => { e.stopPropagation(); clickPreset(btn, cam.id, cam.monitor_preset); });
+    bar.appendChild(btn);
+  }
+
+  wrap.appendChild(bar);
+}
+
+async function init() {
+  const cameras = await (await fetch('/cameras')).json();
+  const n = cameras.length;
+
+  document.getElementById('cam-count').textContent =
+    `${n} camera${n !== 1 ? 's' : ''}`;
+
+  const layoutContainer = document.getElementById('layout-btns');
+  LAYOUT_OPTS.forEach(cols => {
+    const btn = document.createElement('button');
+    btn.textContent = `${cols}×${cols}`;
+    btn.dataset.cols = cols;
+    btn.addEventListener('click', () => applyLayout(cols));
+    layoutContainer.appendChild(btn);
+  });
+
+  const cols = defaultCols(n);
+  applyLayout(cols);
+
+  const grid = document.getElementById('grid');
+  cameras.forEach(cam => grid.appendChild(buildCard(cam)));
+}
+
+init().catch(console.error);
+
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) {
+    document.querySelectorAll('#grid iframe').forEach(iframe => {
+      const src = iframe.src;
+      iframe.src = '';
+      iframe.src = src;
+    });
+  }
+});
+</script>
+</body>
+</html>

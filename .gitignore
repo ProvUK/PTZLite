@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+*.pyo
+go2rtc.exe
+go2rtc_generated.yaml
+go2rtc_debug.yaml

@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Camera Setup — Reolink Viewer</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0d0d0d;
+      color: #e0e0e0;
+      font-family: system-ui, -apple-system, sans-serif;
+      min-height: 100vh;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 10px 18px;
+      background: #161616;
+      border-bottom: 1px solid #2a2a2a;
+    }
+    header h1 { font-size: 1rem; font-weight: 600; letter-spacing: 0.02em; }
+    .back-btn {
+      margin-left: auto;
+      display: flex; align-items: center; gap: 6px;
+      background: #222; border: 1px solid #333; color: #aaa;
+      border-radius: 4px; padding: 4px 12px; font-size: 0.78rem;
+      cursor: pointer; text-decoration: none;
+      transition: background 0.15s, color 0.15s;
+    }
+    .back-btn:hover { background: #2563eb; color: #fff; border-color: #2563eb; }
+
+    .page { padding: 24px; max-width: 960px; margin: 0 auto; }
+
+    .section-title {
+      font-size: 0.72rem; font-weight: 600; letter-spacing: 0.08em;
+      text-transform: uppercase; color: #555; margin-bottom: 14px;
+    }
+
+    /* Camera cards */
+    .cam-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 10px;
+      margin-bottom: 32px;
+    }
+
+    .cam-card {
+      background: #161616;
+      border: 1px solid #2a2a2a;
+      border-radius: 6px;
+      padding: 14px 16px;
+      cursor: pointer;
+      transition: border-color 0.15s;
+    }
+    .cam-card:hover { border-color: #2563eb; }
+    .cam-card-name { font-size: 0.9rem; font-weight: 600; margin-bottom: 4px; }
+    .cam-card-meta { font-size: 0.72rem; color: #666; display: flex; flex-wrap: wrap; gap: 8px; }
+    .cam-card-meta span { display: flex; align-items: center; gap: 3px; }
+    .badge {
+      display: inline-block; font-size: 0.6rem; font-weight: 700;
+      letter-spacing: 0.06em; padding: 2px 6px; border-radius: 3px;
+      background: #2563eb; color: #fff; margin-left: 6px; vertical-align: middle;
+    }
+
+    .add-card {
+      background: transparent;
+      border: 1px dashed #333;
+      border-radius: 6px;
+      padding: 14px 16px;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      gap: 8px; color: #555; font-size: 0.85rem;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .add-card:hover { border-color: #2563eb; color: #2563eb; }
+
+    /* Modal */
+    .modal-backdrop {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.75);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 100;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.15s;
+    }
+    .modal-backdrop.open { opacity: 1; pointer-events: all; }
+
+    .modal {
+      background: #161616;
+      border: 1px solid #333;
+      border-radius: 8px;
+      width: min(620px, 96vw);
+      max-height: 90vh;
+      overflow-y: auto;
+      transform: translateY(12px);
+      transition: transform 0.15s;
+    }
+    .modal-backdrop.open .modal { transform: translateY(0); }
+
+    .modal-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 20px;
+      border-bottom: 1px solid #222;
+    }
+    .modal-header h2 { font-size: 0.95rem; font-weight: 600; }
+    .modal-close {
+      background: none; border: none; color: #555; cursor: pointer;
+      font-size: 1.2rem; line-height: 1; padding: 2px 6px;
+      border-radius: 3px; transition: color 0.1s;
+    }
+    .modal-close:hover { color: #e0e0e0; }
+
+    .modal-body { padding: 20px; }
+
+    /* Form */
+    .form-section { margin-bottom: 20px; }
+    .form-section-title {
+      font-size: 0.68rem; font-weight: 600; letter-spacing: 0.08em;
+      text-transform: uppercase; color: #555; margin-bottom: 12px;
+      padding-bottom: 6px; border-bottom: 1px solid #222;
+    }
+
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 10px; }
+    .form-row.single { grid-template-columns: 1fr; }
+    .form-row.triple { grid-template-columns: 1fr 1fr 1fr; }
+
+    .field { display: flex; flex-direction: column; gap: 5px; }
+    .field label { font-size: 0.72rem; color: #888; font-weight: 500; }
+    .field input, .field select {
+      background: #111; border: 1px solid #333; color: #e0e0e0;
+      border-radius: 4px; padding: 7px 10px; font-size: 0.82rem;
+      outline: none; transition: border-color 0.15s;
+    }
+    .field input:focus, .field select:focus { border-color: #2563eb; }
+    .field input[type="number"] { -moz-appearance: textfield; }
+    .field input::placeholder { color: #444; }
+
+    .field-hint { font-size: 0.68rem; color: #555; margin-top: 2px; }
+
+    .pw-wrap { position: relative; }
+    .pw-wrap input { width: 100%; padding-right: 36px; }
+    .pw-toggle {
+      position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+      background: none; border: none; color: #555; cursor: pointer; padding: 2px;
+      font-size: 0.75rem;
+    }
+    .pw-toggle:hover { color: #aaa; }
+
+    /* Checkbox row */
+    .check-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+    .check-row label { font-size: 0.82rem; color: #ccc; cursor: pointer; }
+    .check-row input[type="checkbox"] { width: 15px; height: 15px; cursor: pointer; accent-color: #2563eb; }
+
+    /* PTZ section */
+    #ptz-fields { display: none; }
+    #ptz-fields.visible { display: block; }
+
+    /* Modal footer */
+    .modal-footer {
+      display: flex; align-items: center; gap: 10px;
+      padding: 16px 20px; border-top: 1px solid #222;
+    }
+    .btn {
+      padding: 7px 18px; border-radius: 4px; font-size: 0.8rem;
+      font-weight: 600; cursor: pointer; border: 1px solid transparent;
+      transition: background 0.15s, color 0.15s;
+    }
+    .btn-primary { background: #2563eb; color: #fff; border-color: #2563eb; }
+    .btn-primary:hover { background: #1d4ed8; }
+    .btn-secondary { background: #222; color: #aaa; border-color: #333; }
+    .btn-secondary:hover { background: #2a2a2a; color: #e0e0e0; }
+    .btn-danger { background: transparent; color: #ef4444; border-color: #7f1d1d; margin-left: auto; }
+    .btn-danger:hover { background: #7f1d1d; color: #fff; }
+
+    /* Toast */
+    #toast {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px);
+      background: #1e3a5f; border: 1px solid #2563eb; color: #93c5fd;
+      padding: 8px 20px; border-radius: 6px; font-size: 0.8rem;
+      opacity: 0; transition: opacity 0.2s, transform 0.2s;
+      pointer-events: none; z-index: 200;
+    }
+    #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+    #toast.error { background: #3b1111; border-color: #dc2626; color: #fca5a5; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Camera Setup</h1>
+  <a href="/" class="back-btn">← Back to viewer</a>
+</header>
+
+<div class="page">
+  <p class="section-title">Cameras</p>
+  <div class="cam-grid" id="cam-grid">
+    <div class="add-card" id="add-btn">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Add camera
+    </div>
+  </div>
+</div>
+
+<!-- Modal -->
+<div class="modal-backdrop" id="modal">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="modal-title">Add camera</h2>
+      <button class="modal-close" id="modal-close">✕</button>
+    </div>
+    <div class="modal-body">
+
+      <div class="form-section">
+        <p class="form-section-title">Identity</p>
+        <div class="form-row">
+          <div class="field">
+            <label for="f-name">Display name</label>
+            <input type="text" id="f-name" placeholder="Front Door" autocomplete="off">
+          </div>
+          <div class="field">
+            <label for="f-id">ID <span style="color:#555;font-weight:400">(URL slug)</span></label>
+            <input type="text" id="f-id" placeholder="front_door" autocomplete="off">
+            <span class="field-hint">Letters, numbers and underscores only</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-section">
+        <p class="form-section-title">Connection</p>
+        <div class="form-row">
+          <div class="field">
+            <label for="f-ip">IP address</label>
+            <input type="text" id="f-ip" placeholder="192.168.0.100" autocomplete="off">
+          </div>
+          <div class="field">
+            <label for="f-port">Port</label>
+            <input type="number" id="f-port" value="443" min="1" max="65535">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="f-username">Username</label>
+            <input type="text" id="f-username" placeholder="admin" autocomplete="off">
+          </div>
+          <div class="field">
+            <label for="f-password">Password</label>
+            <div class="pw-wrap">
+              <input type="password" id="f-password" placeholder="••••••••" autocomplete="off">
+              <button class="pw-toggle" type="button" onclick="togglePw()">show</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-section">
+        <p class="form-section-title">Stream</p>
+        <div class="form-row">
+          <div class="field">
+            <label for="f-channel">Channel</label>
+            <input type="number" id="f-channel" value="0" min="0" max="63">
+            <span class="field-hint">0 for single cameras; NVR channel index for multi-camera</span>
+          </div>
+          <div class="field">
+            <label for="f-stream">Quality</label>
+            <select id="f-stream">
+              <option value="sub">Sub (low bandwidth)</option>
+              <option value="main">Main (full res)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-section">
+        <div class="check-row">
+          <input type="checkbox" id="f-ptz" onchange="togglePtz()">
+          <label for="f-ptz">PTZ camera (pan / tilt / zoom)</label>
+        </div>
+        <div id="ptz-fields">
+          <p class="form-section-title" style="margin-top:4px">PTZ settings</p>
+          <div class="form-row triple">
+            <div class="field">
+              <label for="f-fov-h">Horizontal FoV (°)</label>
+              <input type="number" id="f-fov-h" value="90" min="10" max="360">
+            </div>
+            <div class="field">
+              <label for="f-fov-v">Vertical FoV (°)</label>
+              <input type="number" id="f-fov-v" value="55" min="10" max="180">
+            </div>
+            <div class="field">
+              <label for="f-ptz-speed">PTZ speed (1–63)</label>
+              <input type="number" id="f-ptz-speed" value="40" min="1" max="63">
+            </div>
+          </div>
+          <div class="form-row triple">
+            <div class="field">
+              <label for="f-zoom-speed">Zoom speed (1–63)</label>
+              <input type="number" id="f-zoom-speed" value="63" min="1" max="63">
+            </div>
+            <div class="field">
+              <label for="f-zoom-step">Zoom step (s/tick)</label>
+              <input type="number" id="f-zoom-step" value="0.3" min="0.05" max="5" step="0.05">
+            </div>
+            <div class="field">
+              <label for="f-dps">Speed (°/s)</label>
+              <input type="number" id="f-dps" value="20" min="1" max="360">
+              <span class="field-hint">Used for timed moves</span>
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="field">
+              <label for="f-monitor-preset">Monitor preset ID</label>
+              <input type="number" id="f-monitor-preset" placeholder="none" min="0">
+              <span class="field-hint">Preset to return to (blank = none)</span>
+            </div>
+            <div class="field" style="justify-content:flex-end; gap:12px; flex-direction:row; align-items:flex-end; padding-bottom:2px">
+              <div class="check-row" style="margin:0">
+                <input type="checkbox" id="f-pan-invert">
+                <label for="f-pan-invert">Invert pan</label>
+              </div>
+              <div class="check-row" style="margin:0">
+                <input type="checkbox" id="f-tilt-invert">
+                <label for="f-tilt-invert">Invert tilt</label>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" id="save-btn" onclick="saveCamera()">Save</button>
+      <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-danger" id="delete-btn" onclick="deleteCamera()" style="display:none">Delete camera</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+let _editId = null;  // null = adding new, string = editing existing
+
+// ── Load cameras ──────────────────────────────────────────────────────────────
+
+async function loadCameras() {
+  const cams = await fetch('/api/cameras').then(r => r.json());
+  const grid = document.getElementById('cam-grid');
+  // Remove existing cards (keep add-btn)
+  grid.querySelectorAll('.cam-card').forEach(el => el.remove());
+
+  const addBtn = document.getElementById('add-btn');
+  cams.forEach(cam => {
+    const card = document.createElement('div');
+    card.className = 'cam-card';
+    const meta = [
+      `${cam.ip}:${cam.port ?? 443}`,
+      `ch ${cam.channel ?? 0}`,
+      cam.stream ?? 'sub',
+    ].map(s => `<span>${s}</span>`).join('');
+    card.innerHTML = `
+      <div class="cam-card-name">
+        ${cam.name}${cam.ptz ? '<span class="badge">PTZ</span>' : ''}
+      </div>
+      <div class="cam-card-meta">${meta}</div>
+    `;
+    card.addEventListener('click', () => openEdit(cam));
+    grid.insertBefore(card, addBtn);
+  });
+}
+
+// ── Modal open/close ──────────────────────────────────────────────────────────
+
+function openAdd() {
+  _editId = null;
+  document.getElementById('modal-title').textContent = 'Add camera';
+  document.getElementById('delete-btn').style.display = 'none';
+  clearForm();
+  document.getElementById('modal').classList.add('open');
+}
+
+function openEdit(cam) {
+  _editId = cam.id;
+  document.getElementById('modal-title').textContent = 'Edit camera';
+  document.getElementById('delete-btn').style.display = '';
+  fillForm(cam);
+  document.getElementById('modal').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('modal').classList.remove('open');
+}
+
+document.getElementById('add-btn').addEventListener('click', openAdd);
+document.getElementById('modal-close').addEventListener('click', closeModal);
+document.getElementById('modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('modal')) closeModal();
+});
+
+// ── Form helpers ──────────────────────────────────────────────────────────────
+
+function v(id) { return document.getElementById(id); }
+
+function clearForm() {
+  v('f-name').value = '';
+  v('f-id').value = '';
+  v('f-ip').value = '';
+  v('f-port').value = '443';
+  v('f-username').value = 'admin';
+  v('f-password').value = '';
+  v('f-channel').value = '0';
+  v('f-stream').value = 'sub';
+  v('f-ptz').checked = false;
+  v('f-fov-h').value = '90';
+  v('f-fov-v').value = '55';
+  v('f-ptz-speed').value = '40';
+  v('f-zoom-speed').value = '63';
+  v('f-zoom-step').value = '0.3';
+  v('f-dps').value = '20';
+  v('f-monitor-preset').value = '';
+  v('f-pan-invert').checked = false;
+  v('f-tilt-invert').checked = false;
+  togglePtz();
+}
+
+function fillForm(cam) {
+  v('f-name').value = cam.name ?? '';
+  v('f-id').value = cam.id ?? '';
+  v('f-ip').value = cam.ip ?? '';
+  v('f-port').value = cam.port ?? 443;
+  v('f-username').value = cam.username ?? '';
+  v('f-password').value = cam.password ?? '';
+  v('f-channel').value = cam.channel ?? 0;
+  v('f-stream').value = cam.stream ?? 'sub';
+  v('f-ptz').checked = !!cam.ptz;
+  v('f-fov-h').value = cam.fov_h ?? 90;
+  v('f-fov-v').value = cam.fov_v ?? 55;
+  v('f-ptz-speed').value = cam.ptz_speed ?? 40;
+  v('f-zoom-speed').value = cam.zoom_speed ?? 63;
+  v('f-zoom-step').value = cam.zoom_step_s ?? 0.3;
+  v('f-dps').value = cam.ptz_degrees_per_second ?? 20;
+  v('f-monitor-preset').value = cam.monitor_preset != null ? cam.monitor_preset : '';
+  v('f-pan-invert').checked = !!cam.pan_invert;
+  v('f-tilt-invert').checked = !!cam.tilt_invert;
+  togglePtz();
+}
+
+function formData() {
+  const ptz = v('f-ptz').checked;
+  const monPreset = v('f-monitor-preset').value;
+  const d = {
+    id:       v('f-id').value.trim(),
+    name:     v('f-name').value.trim(),
+    ip:       v('f-ip').value.trim(),
+    port:     parseInt(v('f-port').value) || 443,
+    username: v('f-username').value.trim(),
+    password: v('f-password').value,
+    channel:  parseInt(v('f-channel').value) || 0,
+    stream:   v('f-stream').value,
+    ptz:      ptz,
+  };
+  if (ptz) {
+    d.fov_h = parseFloat(v('f-fov-h').value) || 90;
+    d.fov_v = parseFloat(v('f-fov-v').value) || 55;
+    d.ptz_speed = parseInt(v('f-ptz-speed').value) || 40;
+    d.zoom_speed = parseInt(v('f-zoom-speed').value) || 63;
+    d.zoom_step_s = parseFloat(v('f-zoom-step').value) || 0.3;
+    d.ptz_degrees_per_second = parseFloat(v('f-dps').value) || 20;
+    d.monitor_preset = monPreset !== '' ? parseInt(monPreset) : null;
+    d.pan_invert  = v('f-pan-invert').checked;
+    d.tilt_invert = v('f-tilt-invert').checked;
+  }
+  return d;
+}
+
+function togglePtz() {
+  document.getElementById('ptz-fields').classList.toggle('visible', v('f-ptz').checked);
+}
+
+function togglePw() {
+  const inp = v('f-password');
+  const btn = document.querySelector('.pw-toggle');
+  if (inp.type === 'password') { inp.type = 'text'; btn.textContent = 'hide'; }
+  else { inp.type = 'password'; btn.textContent = 'show'; }
+}
+
+// Auto-generate ID from name
+v('f-name').addEventListener('input', () => {
+  if (_editId) return;  // don't clobber when editing
+  v('f-id').value = v('f-name').value
+    .toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+});
+
+// ── Save / Delete ─────────────────────────────────────────────────────────────
+
+async function saveCamera() {
+  const data = formData();
+  if (!data.id || !data.name || !data.ip) {
+    showToast('Name, ID and IP are required', true); return;
+  }
+
+  const url    = _editId ? `/api/cameras/${_editId}` : '/api/cameras';
+  const method = _editId ? 'PUT' : 'POST';
+
+  const r = await fetch(url, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  const result = await r.json();
+  if (!r.ok) { showToast(result.detail ?? 'Save failed', true); return; }
+
+  closeModal();
+  await loadCameras();
+  showToast(_editId ? 'Camera updated' : 'Camera added');
+}
+
+async function deleteCamera() {
+  if (!confirm(`Delete "${v('f-name').value}"?`)) return;
+  const r = await fetch(`/api/cameras/${_editId}`, { method: 'DELETE' });
+  if (!r.ok) { const e = await r.json(); showToast(e.detail ?? 'Delete failed', true); return; }
+  closeModal();
+  await loadCameras();
+  showToast('Camera deleted');
+}
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+
+let _toastTimer;
+function showToast(msg, error = false) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = error ? 'error show' : 'show';
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+
+loadCameras();
+</script>
+</body>
+</html>
