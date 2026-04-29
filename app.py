@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Version: 1.7
+# Version: 1.8
 # Updated: 2026-04-29
 # v1.0 - 2026-04-28 - Initial stable release: go2rtc streaming, PTZ click-to-centre,
 #                     sequential pan+tilt, optical zoom, presets, serialized NVR API
@@ -12,6 +12,7 @@
 # v1.5 - 2026-04-29 - Add CSP middleware to allow unsafe-eval required by video-rtc.js
 # v1.6 - 2026-04-29 - Fix go2rtc cross-origin WebSocket rejection (add origin: * to API config)
 # v1.7 - 2026-04-29 - Add joystick PTZ: POST /ptz/{id}/start and /ptz/{id}/stop endpoints
+# v1.8 - 2026-04-29 - Add ONVIF WS-Discovery: GET /api/discover scans LAN for cameras
 """
 Reolink camera viewer with click-to-pan PTZ control.
 
@@ -30,9 +31,13 @@ go2rtc will be started automatically and stopped when the app exits.
 import asyncio
 import atexit
 import math
+import re
+import socket
 import subprocess
 import sys
 import time
+import uuid
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import aiohttp
@@ -538,6 +543,90 @@ async def api_delete_camera(cam_id: str):
     _save_config()
     await _go2rtc_delete_stream(cam_id)
     _preset_cache.pop(cam_id, None)
+
+
+# ── ONVIF WS-Discovery ─────────────────────────────────────────────────────────
+
+_WSD_MCAST = ("239.255.255.250", 3702)
+
+_WSD_PROBE_TMPL = (
+    '<?xml version="1.0" encoding="utf-8"?>'
+    '<Envelope xmlns="http://www.w3.org/2003/05/soap-envelope"'
+    ' xmlns:dn="http://www.onvif.org/ver10/network/wsdl"'
+    ' xmlns:wsa="http://schemas.xmlsoap.org/ws/2004/08/addressing"'
+    ' xmlns:wsdd="http://schemas.xmlsoap.org/ws/2005/04/discovery">'
+    "<Header>"
+    "<wsa:Action>http://schemas.xmlsoap.org/ws/2005/04/discovery/Probe</wsa:Action>"
+    "<wsa:MessageID>urn:uuid:{uid}</wsa:MessageID>"
+    "<wsa:To>urn:schemas-xmlsoap-org:ws:2005:04:discovery</wsa:To>"
+    "</Header>"
+    "<Body>"
+    "<wsdd:Probe><wsdd:Types>dn:NetworkVideoTransmitter</wsdd:Types></wsdd:Probe>"
+    "</Body>"
+    "</Envelope>"
+)
+
+_NS_WSDD = "http://schemas.xmlsoap.org/ws/2005/04/discovery"
+
+
+def _parse_wsd_response(data: bytes, sender_ip: str) -> dict | None:
+    try:
+        root = ET.fromstring(data)
+    except ET.ParseError:
+        return None
+
+    xaddrs_el = root.find(f".//{{{_NS_WSDD}}}XAddrs")
+    xaddrs = xaddrs_el.text.strip() if xaddrs_el is not None and xaddrs_el.text else ""
+
+    # Prefer IP from XAddr URL over UDP sender (avoids NAT surprises on same host)
+    ip = sender_ip
+    if xaddrs:
+        m = re.search(r"https?://([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)", xaddrs)
+        if m:
+            ip = m.group(1)
+
+    model = ""
+    scopes_el = root.find(f".//{{{_NS_WSDD}}}Scopes")
+    if scopes_el is not None and scopes_el.text:
+        m = re.search(r"onvif://www\.onvif\.org/hardware/([^\s]+)", scopes_el.text)
+        if m:
+            model = m.group(1).replace("%20", " ").replace("+", " ")
+
+    return {"ip": ip, "model": model}
+
+
+def _ws_discover(timeout: float = 3.0) -> list[dict]:
+    probe = _WSD_PROBE_TMPL.format(uid=uuid.uuid4()).encode()
+    results: list[dict] = []
+    seen: set[str] = set()
+
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 4)
+        sock.settimeout(0.5)
+        sock.sendto(probe, _WSD_MCAST)
+
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            try:
+                data, addr = sock.recvfrom(65535)
+            except socket.timeout:
+                continue
+            result = _parse_wsd_response(data, addr[0])
+            if result and result["ip"] not in seen:
+                seen.add(result["ip"])
+                results.append(result)
+                print(f"WSD: {result['ip']}  model={result['model']!r}")
+    finally:
+        sock.close()
+
+    return results
+
+
+@app.get("/api/discover")
+async def api_discover():
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, _ws_discover)
 
 
 # ── Static files ───────────────────────────────────────────────────────────────

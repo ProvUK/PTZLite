@@ -176,6 +176,33 @@
     .btn-danger { background: transparent; color: #ef4444; border-color: #7f1d1d; margin-left: auto; }
     .btn-danger:hover { background: #7f1d1d; color: #fff; }
 
+    /* Scan / Discovery */
+    .section-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 14px;
+    }
+    .section-header .section-title { margin-bottom: 0; }
+    .scan-btn {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 0.75rem; padding: 5px 14px;
+    }
+    .scan-btn:disabled { opacity: 0.5; cursor: default; }
+
+    .disc-card {
+      border-style: dashed; border-color: #2a2a2a;
+      position: relative;
+    }
+    .disc-card:hover { border-color: #16a34a; border-style: solid; }
+    .disc-card::after {
+      content: '+ Add';
+      position: absolute; top: 10px; right: 12px;
+      font-size: 0.68rem; color: #555;
+    }
+    .disc-card:hover::after { color: #16a34a; }
+
+    #discovery-section { margin-top: 28px; }
+    .disc-empty { font-size: 0.8rem; color: #555; padding: 4px 0; }
+
     /* Toast */
     #toast {
       position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px);
@@ -196,12 +223,23 @@
 </header>
 
 <div class="page">
-  <p class="section-title">Cameras</p>
+  <div class="section-header">
+    <p class="section-title">Cameras</p>
+    <button class="btn btn-secondary scan-btn" id="scan-btn" onclick="scanNetwork()">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      Scan network
+    </button>
+  </div>
   <div class="cam-grid" id="cam-grid">
     <div class="add-card" id="add-btn">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
       Add camera
     </div>
+  </div>
+
+  <div id="discovery-section" style="display:none">
+    <p class="section-title">Discovered devices <span id="disc-count" style="color:#555;font-weight:400;text-transform:none;letter-spacing:0"></span></p>
+    <div class="cam-grid" id="discovery-grid"></div>
   </div>
 </div>
 
@@ -343,34 +381,6 @@
 
 <script>
 let _editId = null;  // null = adding new, string = editing existing
-
-// ── Load cameras ──────────────────────────────────────────────────────────────
-
-async function loadCameras() {
-  const cams = await fetch('/api/cameras').then(r => r.json());
-  const grid = document.getElementById('cam-grid');
-  // Remove existing cards (keep add-btn)
-  grid.querySelectorAll('.cam-card').forEach(el => el.remove());
-
-  const addBtn = document.getElementById('add-btn');
-  cams.forEach(cam => {
-    const card = document.createElement('div');
-    card.className = 'cam-card';
-    const meta = [
-      `${cam.ip}:${cam.port ?? 443}`,
-      `ch ${cam.channel ?? 0}`,
-      cam.stream ?? 'sub',
-    ].map(s => `<span>${s}</span>`).join('');
-    card.innerHTML = `
-      <div class="cam-card-name">
-        ${cam.name}${cam.ptz ? '<span class="badge">PTZ</span>' : ''}
-      </div>
-      <div class="cam-card-meta">${meta}</div>
-    `;
-    card.addEventListener('click', () => openEdit(cam));
-    grid.insertBefore(card, addBtn);
-  });
-}
 
 // ── Modal open/close ──────────────────────────────────────────────────────────
 
@@ -538,7 +548,79 @@ function showToast(msg, error = false) {
   _toastTimer = setTimeout(() => t.classList.remove('show'), 3000);
 }
 
+// ── Discovery ─────────────────────────────────────────────────────────────────
+
+async function scanNetwork() {
+  const btn = document.getElementById('scan-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg> Scanning…';
+
+  try {
+    const devices = await fetch('/api/discover').then(r => r.json());
+    const section = document.getElementById('discovery-section');
+    const grid = document.getElementById('discovery-grid');
+    const count = document.getElementById('disc-count');
+    grid.innerHTML = '';
+
+    if (devices.length === 0) {
+      count.textContent = '';
+      grid.innerHTML = '<p class="disc-empty">No ONVIF devices found on the network</p>';
+    } else {
+      count.textContent = `(${devices.length})`;
+      devices.forEach(d => {
+        const existing = Object.values(cameras_cache).find(c => c.ip === d.ip);
+        const card = document.createElement('div');
+        card.className = 'cam-card disc-card';
+        card.innerHTML = `
+          <div class="cam-card-name">${d.model || 'ONVIF device'}</div>
+          <div class="cam-card-meta">
+            <span>${d.ip}</span>
+            ${existing ? '<span style="color:#2563eb">already added</span>' : ''}
+          </div>`;
+        card.addEventListener('click', () => openAddFromDiscovery(d.ip, d.model));
+        grid.appendChild(card);
+      });
+    }
+    section.style.display = '';
+  } catch (e) {
+    showToast('Scan failed: ' + e.message, true);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Scan network';
+  }
+}
+
+function openAddFromDiscovery(ip, model) {
+  openAdd();
+  v('f-ip').value = ip;
+  if (model) {
+    v('f-name').value = model;
+    v('f-id').value = model.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+  }
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
+
+let cameras_cache = {};
+
+async function loadCameras() {
+  const cams = await fetch('/api/cameras').then(r => r.json());
+  cameras_cache = Object.fromEntries(cams.map(c => [c.id, c]));
+  const grid = document.getElementById('cam-grid');
+  grid.querySelectorAll('.cam-card').forEach(el => el.remove());
+  const addBtn = document.getElementById('add-btn');
+  cams.forEach(cam => {
+    const card = document.createElement('div');
+    card.className = 'cam-card';
+    const meta = [`${cam.ip}:${cam.port ?? 443}`, `ch ${cam.channel ?? 0}`, cam.stream ?? 'sub']
+      .map(s => `<span>${s}</span>`).join('');
+    card.innerHTML = `
+      <div class="cam-card-name">${cam.name}${cam.ptz ? '<span class="badge">PTZ</span>' : ''}</div>
+      <div class="cam-card-meta">${meta}</div>`;
+    card.addEventListener('click', () => openEdit(cam));
+    grid.insertBefore(card, addBtn);
+  });
+}
 
 loadCameras();
 </script>
