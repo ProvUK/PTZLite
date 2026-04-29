@@ -268,7 +268,7 @@ async function connectWebRTC(cam, videoEl) {
   });
 
   const resp = await fetch(
-    `http://${location.hostname}:${cam.go2rtc_port}/api/webrtc?src=${cam.id}`,
+    `/api/webrtc/${cam.id}`,
     { method: 'POST', body: pc.localDescription.sdp, headers: { 'Content-Type': 'application/sdp' } }
   );
   if (!resp.ok) throw new Error(`WebRTC offer rejected: ${resp.status}`);

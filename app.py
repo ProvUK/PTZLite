@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
-# Version: 1.2
+# Version: 1.3
 # Updated: 2026-04-29
 # v1.0 - 2026-04-28 - Initial stable release: go2rtc streaming, PTZ click-to-centre,
 #                     sequential pan+tilt, optical zoom, presets, serialized NVR API
 # v1.1 - 2026-04-28 - Add camera management API (GET/POST/PUT/DELETE /api/cameras)
 # v1.2 - 2026-04-29 - Fix stream quality: delete+re-add go2rtc stream on update so
 #                     sub/main change actually takes effect
+# v1.3 - 2026-04-29 - Add WebRTC signalling proxy to fix CORS (browser→go2rtc cross-origin)
 """
 Reolink camera viewer with click-to-pan PTZ control.
 
@@ -32,7 +33,7 @@ from pathlib import Path
 import aiohttp
 import uvicorn
 import yaml
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -352,6 +353,25 @@ def list_cameras():
         }
         for c in _config["cameras"]
     ]
+
+# ── WebRTC signalling proxy ────────────────────────────────────────────────────
+# Proxying through FastAPI keeps the browser on one origin and avoids CORS issues
+# when the browser POSTs the SDP offer directly to go2rtc's port.
+
+@app.post("/api/webrtc/{cam_id}")
+async def webrtc_offer(cam_id: str, request: Request):
+    if cam_id not in cameras:
+        raise HTTPException(404, "Camera not found")
+    body = await request.body()
+    async with aiohttp.ClientSession() as s:
+        async with s.post(
+            f"http://localhost:{GO2RTC_PORT}/api/webrtc?src={cam_id}",
+            data=body,
+            headers={"Content-Type": "application/sdp"},
+        ) as resp:
+            answer = await resp.text()
+            return Response(content=answer, media_type="application/sdp")
+
 
 # ── Camera management API ──────────────────────────────────────────────────────
 
