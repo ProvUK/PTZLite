@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-# Version: 1.1
-# Updated: 2026-04-28
+# Version: 1.2
+# Updated: 2026-04-29
 # v1.0 - 2026-04-28 - Initial stable release: go2rtc streaming, PTZ click-to-centre,
 #                     sequential pan+tilt, optical zoom, presets, serialized NVR API
 # v1.1 - 2026-04-28 - Add camera management API (GET/POST/PUT/DELETE /api/cameras)
+# v1.2 - 2026-04-29 - Fix stream quality: delete+re-add go2rtc stream on update so
+#                     sub/main change actually takes effect
 """
 Reolink camera viewer with click-to-pan PTZ control.
 
@@ -362,10 +364,12 @@ def _save_config():
 
 
 async def _go2rtc_put_stream(cam: dict):
-    url = f"http://localhost:{GO2RTC_PORT}/api/streams/{cam['id']}"
+    base = f"http://localhost:{GO2RTC_PORT}/api/streams/{cam['id']}"
     try:
         async with aiohttp.ClientSession() as s:
-            await s.put(url, params={"src": _rtsp_url(cam)})
+            await s.delete(base)  # remove existing so PUT replaces it
+            await s.put(base, params={"src": _rtsp_url(cam)})
+        print(f"go2rtc stream updated: {cam['id']} → {_rtsp_url(cam)}")
     except Exception as e:
         print(f"go2rtc stream update failed for {cam['id']}: {e}")
 
