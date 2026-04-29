@@ -22,7 +22,7 @@ python -m PyInstaller ^
     --add-data "static;static" ^
     --hidden-import "pystray._win32" ^
     --hidden-import "PIL._tkinter_finder" ^
-    app.py
+    reolink_viewer.py
 if errorlevel 1 ( echo PyInstaller failed & pause & exit /b 1 )
 
 echo Copying user files into dist...
