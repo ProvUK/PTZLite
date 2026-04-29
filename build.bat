@@ -6,17 +6,15 @@ echo ============================================
 echo.
 
 where python >nul 2>&1
-if errorlevel 1 (
-    echo ERROR: Python not found in PATH
-    pause & exit /b 1
-)
+if errorlevel 1 ( echo ERROR: Python not found in PATH & pause & exit /b 1 )
 
-echo Installing / updating dependencies...
+echo [1/3] Installing dependencies...
 python -m pip install -r requirements.txt pyinstaller --quiet
 if errorlevel 1 ( echo pip failed & pause & exit /b 1 )
 
 echo.
-echo Building executable...
+echo [2/3] Building with PyInstaller...
+if exist "dist\Reolink Viewer" rmdir /s /q "dist\Reolink Viewer"
 python -m PyInstaller ^
     --noconsole ^
     --onedir ^
@@ -27,17 +25,34 @@ python -m PyInstaller ^
     app.py
 if errorlevel 1 ( echo PyInstaller failed & pause & exit /b 1 )
 
+echo Copying user files into dist...
+copy /Y config.yaml "dist\Reolink Viewer\" >nul
+copy /Y go2rtc.exe  "dist\Reolink Viewer\" >nul
+
 echo.
-echo Copying user files...
-copy /Y config.yaml  "dist\Reolink Viewer\" >nul
-copy /Y go2rtc.exe   "dist\Reolink Viewer\" >nul
+echo [3/3] Building installer...
+
+set "ISCC="
+if exist "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" set "ISCC=C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+if exist "C:\Program Files\Inno Setup 6\ISCC.exe"       set "ISCC=C:\Program Files\Inno Setup 6\ISCC.exe"
+
+if "%ISCC%"=="" (
+    echo.
+    echo NOTE: Inno Setup 6 not found - skipping installer.
+    echo Install it from https://jrsoftware.org/isinfo.php then re-run this script.
+    echo.
+    echo The raw build is still available at:
+    echo   dist\Reolink Viewer\
+    pause & exit /b 0
+)
+
+"%ISCC%" installer.iss
+if errorlevel 1 ( echo Inno Setup failed & pause & exit /b 1 )
 
 echo.
 echo ============================================
-echo  Done!  Package ready at:
-echo    dist\Reolink Viewer\
-echo.
-echo  To deploy to another PC, copy that folder.
-echo  Edit config.yaml inside it before launching.
+echo  Done!
+echo    Installer : Reolink Viewer Setup.exe
+echo    Raw build : dist\Reolink Viewer\
 echo ============================================
 pause
