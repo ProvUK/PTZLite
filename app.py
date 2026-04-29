@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Version: 1.8
+# Version: 1.9
 # Updated: 2026-04-29
 # v1.0 - 2026-04-28 - Initial stable release: go2rtc streaming, PTZ click-to-centre,
 #                     sequential pan+tilt, optical zoom, presets, serialized NVR API
@@ -13,6 +13,7 @@
 # v1.6 - 2026-04-29 - Fix go2rtc cross-origin WebSocket rejection (add origin: * to API config)
 # v1.7 - 2026-04-29 - Add joystick PTZ: POST /ptz/{id}/start and /ptz/{id}/stop endpoints
 # v1.8 - 2026-04-29 - Add ONVIF WS-Discovery: GET /api/discover scans LAN for cameras
+# v1.9 - 2026-04-29 - Restart go2rtc on camera add/update/delete instead of using unreliable PUT API
 """
 Reolink camera viewer with click-to-pan PTZ control.
 
@@ -460,28 +461,46 @@ def _save_config():
     cameras.update({c["id"]: c for c in _config["cameras"]})
 
 
-async def _go2rtc_put_stream(cam: dict):
-    async with aiohttp.ClientSession() as s:
-        for stream in ("main", "sub"):
-            name = f"{cam['id']}_{stream}"
-            base = f"http://localhost:{GO2RTC_PORT}/api/streams/{name}"
-            try:
-                await s.delete(base)
-                await s.put(base, params={"src": _rtsp_url(cam, stream)})
-                print(f"go2rtc stream updated: {name}")
-            except Exception as e:
-                print(f"go2rtc stream update failed for {name}: {e}")
+def _reload_go2rtc():
+    """Rewrite go2rtc config from current _config and restart the process."""
+    global _go2rtc_proc
 
+    streams = {}
+    for cam in _config["cameras"]:
+        streams[f"{cam['id']}_main"] = _rtsp_url(cam, "main")
+        streams[f"{cam['id']}_sub"]  = _rtsp_url(cam, "sub")
 
-async def _go2rtc_delete_stream(cam_id: str):
-    async with aiohttp.ClientSession() as s:
-        for stream in ("main", "sub"):
-            name = f"{cam_id}_{stream}"
-            url = f"http://localhost:{GO2RTC_PORT}/api/streams/{name}"
-            try:
-                await s.delete(url)
-            except Exception as e:
-                print(f"go2rtc stream delete failed for {name}: {e}")
+    go2rtc_cfg = {
+        "streams": streams,
+        "api": {"listen": f":{GO2RTC_PORT}", "origin": "*"},
+        "log": {"level": "warn"},
+        "rtsp": {"listen": ""},
+    }
+    cfg_file = BASE / "go2rtc_generated.yaml"
+    with open(cfg_file, "w") as f:
+        yaml.dump(go2rtc_cfg, f)
+
+    if _go2rtc_proc and _go2rtc_proc.poll() is None:
+        _go2rtc_proc.terminate()
+        try:
+            _go2rtc_proc.wait(timeout=3)
+        except subprocess.TimeoutExpired:
+            _go2rtc_proc.kill()
+
+    _go2rtc_proc = subprocess.Popen([str(GO2RTC_BIN), "-config", str(cfg_file)])
+
+    import urllib.request
+    for _ in range(20):
+        try:
+            urllib.request.urlopen(f"http://localhost:{GO2RTC_PORT}/api/streams", timeout=1)
+            break
+        except Exception:
+            time.sleep(0.3)
+    else:
+        print("WARNING: go2rtc did not restart in time")
+
+    _copy_go2rtc_js()
+    print("go2rtc reloaded")
 
 
 @app.get("/api/cameras")
@@ -499,7 +518,7 @@ async def api_add_camera(request: Request):
         raise HTTPException(409, f"Camera '{cam_id}' already exists")
     _config["cameras"].append(data)
     _save_config()
-    await _go2rtc_put_stream(data)
+    await asyncio.get_event_loop().run_in_executor(None, _reload_go2rtc)
     return data
 
 
@@ -511,19 +530,12 @@ async def api_update_camera(cam_id: str, request: Request):
         raise HTTPException(404, f"Camera '{cam_id}' not found")
 
     new_id = data.get("id", cam_id).strip()
-    # If the ID changed, check for conflicts
     if new_id != cam_id and any(c["id"] == new_id for c in _config["cameras"]):
         raise HTTPException(409, f"Camera '{new_id}' already exists")
 
     old_cam = _config["cameras"][idx]
     _config["cameras"][idx] = data
-
     _save_config()
-
-    # Update go2rtc: remove old stream name if ID changed, add new
-    if new_id != cam_id:
-        await _go2rtc_delete_stream(cam_id)
-    await _go2rtc_put_stream(data)
 
     # Invalidate cached token if connection details changed
     old_key = _nvr_key(old_cam)
@@ -531,6 +543,7 @@ async def api_update_camera(cam_id: str, request: Request):
     if old_key != new_key:
         _tokens.pop(old_key, None)
 
+    await asyncio.get_event_loop().run_in_executor(None, _reload_go2rtc)
     return data
 
 
@@ -541,8 +554,8 @@ async def api_delete_camera(cam_id: str):
         raise HTTPException(404, f"Camera '{cam_id}' not found")
     _config["cameras"].pop(idx)
     _save_config()
-    await _go2rtc_delete_stream(cam_id)
     _preset_cache.pop(cam_id, None)
+    await asyncio.get_event_loop().run_in_executor(None, _reload_go2rtc)
 
 
 # ── ONVIF WS-Discovery ─────────────────────────────────────────────────────────
