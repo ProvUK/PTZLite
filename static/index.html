@@ -24,20 +24,26 @@
     header {
       display: flex;
       align-items: center;
-      gap: 16px;
-      padding: 10px 18px;
+      gap: 10px;
+      padding: 8px 14px;
       background: #161616;
       border-bottom: 1px solid #2a2a2a;
       flex-shrink: 0;
     }
 
     header h1 { font-size: 1rem; font-weight: 600; letter-spacing: 0.02em; }
-    #cam-count { font-size: 0.78rem; color: #666; }
+    #cam-count { font-size: 0.78rem; color: #555; }
 
-    #layout-btns, #stream-btns { display: flex; gap: 6px; }
+    #stream-btns, #layout-btns, #nav-btns {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
     #layout-btns { margin-left: auto; }
 
-    #layout-btns button, #stream-btns button {
+    #stream-btns button,
+    #layout-btns button,
+    #nav-btns button {
       background: #222;
       border: 1px solid #333;
       color: #aaa;
@@ -47,26 +53,19 @@
       cursor: pointer;
       transition: background 0.15s, color 0.15s;
     }
-    #layout-btns button:hover,
-    #layout-btns button.active,
-    #stream-btns button:hover,
-    #stream-btns button.active {
-      background: #2563eb;
-      color: #fff;
-      border-color: #2563eb;
-    }
+    #stream-btns button:hover,   #stream-btns button.active,
+    #layout-btns button:hover,   #layout-btns button.active,
+    #nav-btns button:hover { background: #2563eb; color: #fff; border-color: #2563eb; }
+
+    #nav-btns button:disabled { opacity: 0.3; cursor: default; pointer-events: none; }
+    #nav-btns button { padding: 4px 8px; }
+    #page-info { font-size: 0.72rem; color: #555; min-width: 36px; text-align: center; }
 
     #settings-btn {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 30px;
-      height: 30px;
-      background: #222;
-      border: 1px solid #333;
-      border-radius: 4px;
-      color: #aaa;
-      text-decoration: none;
+      display: flex; align-items: center; justify-content: center;
+      width: 30px; height: 30px;
+      background: #222; border: 1px solid #333; border-radius: 4px;
+      color: #aaa; text-decoration: none;
       transition: background 0.15s, color 0.15s;
     }
     #settings-btn:hover { background: #2563eb; color: #fff; border-color: #2563eb; }
@@ -87,27 +86,31 @@
       display: flex;
       align-items: center;
       justify-content: center;
+      min-width: 0;
+      min-height: 0;
     }
 
-    /* video-stream / video-rtc web component */
-    .cam-wrap video-stream,
     .cam-wrap video-rtc {
       width: 100%;
       height: 100%;
       display: block;
       background: #000;
     }
-    .cam-wrap video-stream video,
     .cam-wrap video-rtc video {
       width: 100%;
       height: 100%;
       object-fit: contain;
     }
 
+    /* Fullscreen mode */
+    .cam-wrap:fullscreen         { background: #000; }
+    .cam-wrap:-webkit-full-screen { background: #000; }
+    .cam-wrap:fullscreen video-rtc,
+    .cam-wrap:-webkit-full-screen video-rtc { width: 100vw; height: 100vh; }
+
     .cam-label {
       position: absolute;
-      top: 7px;
-      left: 9px;
+      top: 7px; left: 9px;
       background: rgba(0,0,0,.65);
       backdrop-filter: blur(4px);
       color: #eee;
@@ -122,20 +125,37 @@
 
     .ptz-badge {
       position: absolute;
-      top: 7px;
-      right: 9px;
-      background: #2563eb;
-      color: #fff;
-      font-size: 0.65rem;
-      font-weight: 700;
-      letter-spacing: 0.08em;
-      padding: 3px 7px;
-      border-radius: 4px;
+      top: 7px; right: 44px;
+      background: #2563eb; color: #fff;
+      font-size: 0.65rem; font-weight: 700; letter-spacing: 0.08em;
+      padding: 3px 7px; border-radius: 4px;
       pointer-events: none;
       z-index: 2;
     }
 
-    /* Crosshair overlay — only on PTZ cameras */
+    /* Fullscreen button — top-right of every card, visible on hover */
+    .fullscreen-btn {
+      position: absolute;
+      top: 7px; right: 9px;
+      z-index: 8;
+      background: rgba(0,0,0,.65);
+      backdrop-filter: blur(4px);
+      border: 1px solid rgba(255,255,255,.15);
+      border-radius: 4px;
+      color: #aaa;
+      cursor: pointer;
+      width: 26px; height: 26px;
+      display: flex; align-items: center; justify-content: center;
+      padding: 0;
+      opacity: 0;
+      transition: opacity 0.15s, color 0.15s;
+    }
+    .cam-wrap:hover .fullscreen-btn       { opacity: 1; }
+    .cam-wrap:fullscreen .fullscreen-btn,
+    .cam-wrap:-webkit-full-screen .fullscreen-btn { opacity: 1; }
+    .fullscreen-btn:hover { color: #fff; border-color: rgba(255,255,255,.4); }
+
+    /* PTZ overlay */
     .ptz-overlay {
       position: absolute;
       inset: 0;
@@ -143,13 +163,10 @@
       z-index: 3;
     }
 
-    /* Centre reticle */
     .reticle {
       position: absolute;
-      top: 50%;
-      left: 50%;
-      width: 22px;
-      height: 22px;
+      top: 50%; left: 50%;
+      width: 22px; height: 22px;
       transform: translate(-50%, -50%);
       pointer-events: none;
       z-index: 4;
@@ -162,11 +179,9 @@
     .reticle::before { width: 1px; height: 100%; left: 50%; }
     .reticle::after  { height: 1px; width: 100%; top: 50%; }
 
-    /* Click ripple */
     .ripple {
       position: absolute;
-      width: 36px;
-      height: 36px;
+      width: 36px; height: 36px;
       border: 2px solid rgba(255,255,255,0.9);
       border-radius: 50%;
       pointer-events: none;
@@ -178,15 +193,10 @@
       to { transform: translate(-50%, -50%) scale(1.8); opacity: 0; }
     }
 
-    /* Preset buttons */
     .preset-bar {
       position: absolute;
-      bottom: 7px;
-      left: 9px;
-      right: 9px;
-      display: flex;
-      gap: 4px;
-      flex-wrap: wrap;
+      bottom: 7px; left: 9px; right: 9px;
+      display: flex; gap: 4px; flex-wrap: wrap;
       z-index: 5;
       pointer-events: none;
     }
@@ -194,9 +204,7 @@
       background: rgba(0,0,0,.65);
       backdrop-filter: blur(4px);
       color: #ddd;
-      font-size: 0.65rem;
-      font-weight: 600;
-      letter-spacing: 0.04em;
+      font-size: 0.65rem; font-weight: 600; letter-spacing: 0.04em;
       padding: 3px 9px;
       border: 1px solid rgba(255,255,255,.15);
       border-radius: 4px;
@@ -208,19 +216,15 @@
     .preset-btn:hover { background: rgba(37,99,235,.85); color: #fff; border-color: #2563eb; }
     .preset-btn.monitor { border-color: rgba(250,204,21,.4); color: #fcd34d; }
     .preset-btn.monitor:hover { background: rgba(161,98,7,.85); border-color: #ca8a04; }
-    .preset-btn.failed {
-      animation: preset-fail 0.6s ease-out forwards;
-    }
+    .preset-btn.failed { animation: preset-fail 0.6s ease-out forwards; }
     @keyframes preset-fail {
       0%   { background: rgba(220,38,38,.85); border-color: #dc2626; color: #fff; }
       100% { background: rgba(0,0,0,.65); border-color: rgba(255,255,255,.15); color: #ddd; }
     }
 
-    /* Joystick visual */
     .joystick-ring {
       position: absolute;
-      width: 120px;
-      height: 120px;
+      width: 120px; height: 120px;
       border: 2px solid rgba(255,255,255,0.3);
       border-radius: 50%;
       transform: translate(-50%, -50%);
@@ -230,8 +234,7 @@
     }
     .joystick-knob {
       position: absolute;
-      width: 20px;
-      height: 20px;
+      width: 20px; height: 20px;
       background: rgba(255,255,255,0.85);
       border-radius: 50%;
       transform: translate(-50%, -50%);
@@ -251,6 +254,11 @@
     <button data-stream="sub">Sub</button>
   </div>
   <div id="layout-btns"></div>
+  <div id="nav-btns" style="display:none">
+    <button id="prev-btn" onclick="changePage(-1)">&#8249;</button>
+    <span id="page-info"></span>
+    <button id="next-btn" onclick="changePage(1)">&#8250;</button>
+  </div>
   <a href="/settings.html" id="settings-btn" title="Camera setup">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
@@ -263,7 +271,7 @@
 // ── Stream state ─────────────────────────────────────────────────────────────
 
 let activeStream = 'main';
-let go2rtcPort = 1984;
+let go2rtcPort   = 1984;
 
 function streamSrc(camId) {
   return `ws://${location.hostname}:${go2rtcPort}/api/ws?src=${camId}_${activeStream}`;
@@ -275,7 +283,6 @@ function setStream(stream) {
   document.querySelectorAll('#stream-btns button').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.stream === stream);
   });
-  // Update all video-stream / video-rtc elements to the new stream variant
   document.querySelectorAll('[data-cam-id]').forEach(el => {
     el.src = streamSrc(el.dataset.camId);
   });
@@ -286,18 +293,75 @@ document.getElementById('stream-btns').addEventListener('click', e => {
   if (btn) setStream(btn.dataset.stream);
 });
 
+// ── Layout & pagination ───────────────────────────────────────────────────────
+
+const LAYOUTS = [
+  { label: '1×1', cols: 1, rows: 1 },
+  { label: '2×1', cols: 2, rows: 1 },
+  { label: '2×2', cols: 2, rows: 2 },
+];
+
+let _layout  = LAYOUTS[2];
+let _page    = 0;
+let _cameras = [];
+
+function perPage()   { return _layout.cols * _layout.rows; }
+function pageCount() { return Math.max(1, Math.ceil(_cameras.length / perPage())); }
+
+function renderGrid() {
+  const grid = document.getElementById('grid');
+  grid.innerHTML = '';  // destroys existing video-rtc elements → stops streams
+  grid.style.gridTemplateColumns = `repeat(${_layout.cols}, 1fr)`;
+  grid.style.gridTemplateRows    = `repeat(${_layout.rows}, 1fr)`;
+
+  const start = _page * perPage();
+  const slice = _cameras.slice(start, start + perPage());
+  slice.forEach(cam => grid.appendChild(buildCard(cam)));
+
+  // Empty slots so grid shape is always preserved
+  for (let i = slice.length; i < perPage(); i++) {
+    const empty = document.createElement('div');
+    empty.className = 'cam-wrap';
+    grid.appendChild(empty);
+  }
+
+  // Pagination nav
+  const pc = pageCount();
+  const navEl = document.getElementById('nav-btns');
+  navEl.style.display = pc > 1 ? '' : 'none';
+  document.getElementById('prev-btn').disabled = _page === 0;
+  document.getElementById('next-btn').disabled = _page >= pc - 1;
+  document.getElementById('page-info').textContent = `${_page + 1} / ${pc}`;
+}
+
+function setLayout(layout) {
+  _layout = layout;
+  _page   = 0;
+  renderGrid();
+  document.querySelectorAll('#layout-btns button').forEach(b => {
+    b.classList.toggle('active', b.dataset.layout === layout.label);
+  });
+}
+
+function changePage(delta) {
+  _page = Math.max(0, Math.min(pageCount() - 1, _page + delta));
+  renderGrid();
+}
+
+function defaultLayout(n) {
+  if (n <= 1) return LAYOUTS[0];
+  if (n <= 2) return LAYOUTS[1];
+  return LAYOUTS[2];
+}
+
 // ── PTZ Joystick ─────────────────────────────────────────────────────────────
-// Hold left mouse button and drag from the press point to steer the camera.
-// Distance from the press origin maps to speed; direction maps to pan/tilt.
-// Releasing stops the camera instantly. A tap (< 6px drag) falls through to
-// the existing click-to-pan behaviour.
 
-const JOYSTICK_MAX_PX  = 60;   // px from origin that equals full speed
-const JOYSTICK_DEAD_PX =  8;   // px — inner deadzone, no movement sent
-const JOYSTICK_CLICK_PX = 6;   // px — treat release as click if within this
-const JOYSTICK_RATE_MS  = 80;  // ms between direction-update API calls
+const JOYSTICK_MAX_PX   = 60;
+const JOYSTICK_DEAD_PX  =  8;
+const JOYSTICK_CLICK_PX =  6;
+const JOYSTICK_RATE_MS  = 80;
 
-const _joysticks = {};  // camId → state
+const _joysticks = {};
 
 function joystickStart(e, overlay, camId) {
   if (e.button !== 0) return;
@@ -321,9 +385,9 @@ function joystickStart(e, overlay, camId) {
 
   const state = {
     active: true,
-    originX: e.clientX, originY: e.clientY,  // absolute coords
+    originX: e.clientX, originY: e.clientY,
     overlayLeft: rect.left, overlayTop: rect.top,
-    ox, oy,        // origin relative to overlay (for knob positioning)
+    ox, oy,
     ring, knob,
     moved: false,
     wasMoving: false,
@@ -333,7 +397,6 @@ function joystickStart(e, overlay, camId) {
   };
   _joysticks[camId] = state;
 
-  // Use document-level handlers so dragging outside the overlay still works
   function onMove(ev) { if (state.active) joystickMove(ev, state, camId); }
   function onUp(ev)   {
     document.removeEventListener('mousemove', onMove);
@@ -351,15 +414,13 @@ function joystickMove(e, state, camId) {
 
   if (dist > JOYSTICK_CLICK_PX) state.moved = true;
 
-  // Clamp knob to ring radius
   const clamped = Math.min(dist, JOYSTICK_MAX_PX);
   const angle   = Math.atan2(dy, dx);
   state.knob.style.left = `${state.ox + Math.cos(angle) * clamped}px`;
   state.knob.style.top  = `${state.oy + Math.sin(angle) * clamped}px`;
 
   if (dist < JOYSTICK_DEAD_PX) {
-    state.lastX = 0;
-    state.lastY = 0;
+    state.lastX = 0; state.lastY = 0;
     if (state.wasMoving) {
       state.wasMoving = false;
       fetch(`/ptz/${camId}/stop`, { method: 'POST' }).catch(() => {});
@@ -372,7 +433,6 @@ function joystickMove(e, state, camId) {
   state.lastY = Math.sin(angle) * mag;
   state.wasMoving = true;
 
-  // Throttle: fire immediately on first move, then rate-limit
   if (state.timer) return;
   state.timer = setTimeout(() => {
     state.timer = null;
@@ -394,15 +454,13 @@ function joystickEnd(e, overlay, state, camId) {
   delete _joysticks[camId];
 
   if (!state.moved) {
-    // Tap with no drag → fall through to click-to-pan using the press position
     handlePtzClick(state.startEvent, overlay, camId);
     return;
   }
-
   fetch(`/ptz/${camId}/stop`, { method: 'POST' }).catch(() => {});
 }
 
-// ── PTZ ──────────────────────────────────────────────────────────────────────
+// ── PTZ click ─────────────────────────────────────────────────────────────────
 
 function showRipple(overlay, x, y) {
   const r = document.createElement('div');
@@ -429,8 +487,8 @@ async function handlePtzClick(e, overlay, camId) {
 
 // ── Zoom ─────────────────────────────────────────────────────────────────────
 
-const _digitalZoom  = {};  // camId → {scale, tx, ty}
-const _opticalQueue = {};  // camId → {dir, steps, timer}
+const _digitalZoom  = {};
+const _opticalQueue = {};
 
 function applyDigitalZoom(e, overlay, vsEl, camId) {
   const factor = e.deltaY < 0 ? 1.12 : (1 / 1.12);
@@ -482,22 +540,12 @@ function handleScroll(e, overlay, vsEl, camId) {
   else applyDigitalZoom(e, overlay, vsEl, camId);
 }
 
-// ── Layout ────────────────────────────────────────────────────────────────────
+// ── Build camera card ─────────────────────────────────────────────────────────
 
-const LAYOUT_OPTS = [1, 2, 3, 4];
-
-function applyLayout(cols) {
-  document.getElementById('grid').style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
-  document.querySelectorAll('#layout-btns button').forEach(b => {
-    b.classList.toggle('active', +b.dataset.cols === cols);
-  });
-}
-
-function defaultCols(n) {
-  return n <= 1 ? 1 : n <= 4 ? 2 : n <= 9 ? 3 : 4;
-}
-
-// ── Build UI ──────────────────────────────────────────────────────────────────
+const FS_ICON = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+  <polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/>
+  <line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/>
+</svg>`;
 
 function buildCard(cam) {
   const wrap = document.createElement('div');
@@ -513,9 +561,21 @@ function buildCard(cam) {
   label.textContent = cam.name;
   wrap.appendChild(label);
 
+  // Fullscreen button (top-right, revealed on hover)
+  const fsBtn = document.createElement('button');
+  fsBtn.className = 'fullscreen-btn';
+  fsBtn.title = 'Full screen (Esc to exit)';
+  fsBtn.innerHTML = FS_ICON;
+  fsBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    if (!document.fullscreenElement) wrap.requestFullscreen();
+    else document.exitFullscreen();
+  });
+  wrap.appendChild(fsBtn);
+
   if (cam.ptz) {
     const badge = document.createElement('div');
-    badge.className = 'ptz-badge';
+    badge.className = 'ptz-badge';  // CSS already places it at right:44px
     badge.textContent = 'PTZ';
     wrap.appendChild(badge);
 
@@ -525,7 +585,7 @@ function buildCard(cam) {
 
     const overlay = document.createElement('div');
     overlay.className = 'ptz-overlay';
-    overlay.title = 'Click to pan / tilt';
+    overlay.title = 'Drag to steer · click to pan';
     overlay.addEventListener('mousedown', e => joystickStart(e, overlay, cam.id));
     overlay.addEventListener('wheel', e => handleScroll(e, overlay, vs, cam.id), { passive: false });
     overlay.addEventListener('contextmenu', e => e.preventDefault());
@@ -555,8 +615,7 @@ async function buildPresetBar(cam, wrap) {
         btn.classList.add('failed');
         btn.addEventListener('animationend', () => btn.classList.remove('failed'), { once: true });
       }
-    } catch (err) {
-      console.error('Preset error:', err);
+    } catch {
       btn.classList.add('failed');
       btn.addEventListener('animationend', () => btn.classList.remove('failed'), { once: true });
     }
@@ -583,28 +642,34 @@ async function buildPresetBar(cam, wrap) {
   wrap.appendChild(bar);
 }
 
+// ── Init ─────────────────────────────────────────────────────────────────────
+
 async function init() {
   await customElements.whenDefined('video-rtc');
   const cameras = await (await fetch('/cameras')).json();
   const n = cameras.length;
 
-  if (cameras.length > 0) go2rtcPort = cameras[0].go2rtc_port;
-
+  if (n > 0) go2rtcPort = cameras[0].go2rtc_port;
   document.getElementById('cam-count').textContent = `${n} camera${n !== 1 ? 's' : ''}`;
 
+  // Build layout buttons
   const layoutContainer = document.getElementById('layout-btns');
-  LAYOUT_OPTS.forEach(cols => {
+  LAYOUTS.forEach(layout => {
     const btn = document.createElement('button');
-    btn.textContent = `${cols}×${cols}`;
-    btn.dataset.cols = cols;
-    btn.addEventListener('click', () => applyLayout(cols));
+    btn.textContent = layout.label;
+    btn.dataset.layout = layout.label;
+    btn.addEventListener('click', () => setLayout(layout));
     layoutContainer.appendChild(btn);
   });
 
-  applyLayout(defaultCols(n));
+  _cameras = cameras;
+  _layout  = defaultLayout(n);
 
-  const grid = document.getElementById('grid');
-  cameras.forEach(cam => grid.appendChild(buildCard(cam)));
+  document.querySelectorAll('#layout-btns button').forEach(b => {
+    b.classList.toggle('active', b.dataset.layout === _layout.label);
+  });
+
+  renderGrid();
 }
 
 init().catch(console.error);
