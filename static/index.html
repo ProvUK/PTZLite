@@ -229,50 +229,56 @@
 
 <script>
 // ── WebRTC ────────────────────────────────────────────────────────────────────
+// go2rtc uses WebSocket signalling at /api/ws — server sends offer, client answers.
+// WebSocket connections don't have fetch()-style CORS restrictions so we connect
+// directly to go2rtc's port without needing a proxy.
 
 const _pcs = {};  // camId → RTCPeerConnection
+const _wss = {};  // camId → WebSocket
 
-async function connectWebRTC(cam, videoEl) {
-  if (_pcs[cam.id]) {
-    _pcs[cam.id].close();
-    delete _pcs[cam.id];
-  }
+function connectWebRTC(cam, videoEl) {
+  // Tear down any existing connection for this cam
+  if (_pcs[cam.id]) { _pcs[cam.id].close(); delete _pcs[cam.id]; }
+  if (_wss[cam.id]) { _wss[cam.id].close(); delete _wss[cam.id]; }
 
   const pc = new RTCPeerConnection({ iceServers: [] });
   _pcs[cam.id] = pc;
 
-  pc.addTransceiver('video', { direction: 'recvonly' });
-  pc.addTransceiver('audio', { direction: 'recvonly' });
-
   pc.ontrack = e => {
-    if (e.track.kind === 'video' && !videoEl.srcObject) {
-      videoEl.srcObject = e.streams[0];
+    if (!videoEl.srcObject) videoEl.srcObject = e.streams[0];
+  };
+
+  // Trickle ICE — send candidates to go2rtc as they're gathered
+  pc.onicecandidate = e => {
+    if (e.candidate && _wss[cam.id]?.readyState === WebSocket.OPEN) {
+      _wss[cam.id].send(JSON.stringify({ type: 'webrtc/candidate', value: e.candidate.candidate }));
     }
   };
 
-  pc.onconnectionstatechange = () => {
-    const s = pc.connectionState;
-    if ((s === 'failed' || s === 'disconnected') && _pcs[cam.id] === pc) {
-      setTimeout(() => connectWebRTC(cam, videoEl).catch(console.error), 2000);
+  const ws = new WebSocket(`ws://${location.hostname}:${cam.go2rtc_port}/api/ws?src=${cam.id}`);
+  _wss[cam.id] = ws;
+
+  ws.onmessage = async ({ data }) => {
+    const msg = JSON.parse(data);
+    if (msg.type === 'webrtc/offer') {
+      await pc.setRemoteDescription({ type: 'offer', sdp: msg.value });
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      ws.send(JSON.stringify({ type: 'webrtc/answer', value: answer.sdp }));
+    } else if (msg.type === 'webrtc/candidate') {
+      await pc.addIceCandidate({ candidate: msg.value, sdpMid: '0', sdpMLineIndex: 0 }).catch(() => {});
     }
   };
 
-  const offer = await pc.createOffer();
-  await pc.setLocalDescription(offer);
+  ws.onerror = e => console.error(`WebRTC WS error ${cam.id}:`, e);
 
-  // Wait for ICE gathering — fast on LAN with no STUN servers
-  await new Promise(resolve => {
-    if (pc.iceGatheringState === 'complete') { resolve(); return; }
-    pc.onicegatheringstatechange = () => { if (pc.iceGatheringState === 'complete') resolve(); };
-    setTimeout(resolve, 3000);
-  });
-
-  const resp = await fetch(
-    `/api/webrtc/${cam.id}`,
-    { method: 'POST', body: pc.localDescription.sdp, headers: { 'Content-Type': 'application/sdp' } }
-  );
-  if (!resp.ok) throw new Error(`WebRTC offer rejected: ${resp.status}`);
-  await pc.setRemoteDescription({ type: 'answer', sdp: await resp.text() });
+  ws.onclose = () => {
+    // Reconnect if this is still the active connection
+    if (_wss[cam.id] === ws) {
+      delete _wss[cam.id];
+      setTimeout(() => connectWebRTC(cam, videoEl), 3000);
+    }
+  };
 }
 
 // ── PTZ ──────────────────────────────────────────────────────────────────────
@@ -388,10 +394,7 @@ function buildCard(cam) {
   wrap.appendChild(connecting);
   video.addEventListener('playing', () => connecting.remove(), { once: true });
 
-  connectWebRTC(cam, video).catch(err => {
-    console.error(`WebRTC ${cam.id}:`, err);
-    connecting.textContent = 'Stream unavailable';
-  });
+  connectWebRTC(cam, video);
 
   const label = document.createElement('div');
   label.className = 'cam-label';

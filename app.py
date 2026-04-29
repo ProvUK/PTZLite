@@ -370,7 +370,10 @@ async def webrtc_offer(cam_id: str, request: Request):
             headers={"Content-Type": "application/sdp"},
         ) as resp:
             answer = await resp.text()
-            return Response(content=answer, media_type="application/sdp")
+            print(f"go2rtc WebRTC {cam_id}: status={resp.status} body_len={len(answer)}")
+            if resp.status != 200:
+                print(f"  go2rtc error body: {answer[:300]}")
+            return Response(content=answer, status_code=resp.status, media_type="application/sdp")
 
 
 # ── Camera management API ──────────────────────────────────────────────────────
