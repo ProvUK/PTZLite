@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Reolink Viewer</title>
+  <script type="module" src="/video-stream.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -30,8 +31,10 @@
     header h1 { font-size: 1rem; font-weight: 600; letter-spacing: 0.02em; }
     #cam-count { font-size: 0.78rem; color: #666; }
 
-    #layout-btns { margin-left: auto; display: flex; gap: 6px; }
-    #layout-btns button {
+    #layout-btns, #stream-btns { display: flex; gap: 6px; }
+    #layout-btns { margin-left: auto; }
+
+    #layout-btns button, #stream-btns button {
       background: #222;
       border: 1px solid #333;
       color: #aaa;
@@ -42,7 +45,9 @@
       transition: background 0.15s, color 0.15s;
     }
     #layout-btns button:hover,
-    #layout-btns button.active {
+    #layout-btns button.active,
+    #stream-btns button:hover,
+    #stream-btns button.active {
       background: #2563eb;
       color: #fff;
       border-color: #2563eb;
@@ -81,12 +86,19 @@
       justify-content: center;
     }
 
-    .cam-wrap video {
+    /* video-stream / video-rtc web component */
+    .cam-wrap video-stream,
+    .cam-wrap video-rtc {
+      width: 100%;
+      height: 100%;
+      display: block;
+      background: #000;
+    }
+    .cam-wrap video-stream video,
+    .cam-wrap video-rtc video {
       width: 100%;
       height: 100%;
       object-fit: contain;
-      display: block;
-      background: #000;
     }
 
     .cam-label {
@@ -200,17 +212,6 @@
       0%   { background: rgba(220,38,38,.85); border-color: #dc2626; color: #fff; }
       100% { background: rgba(0,0,0,.65); border-color: rgba(255,255,255,.15); color: #ddd; }
     }
-
-    /* Connecting state */
-    .connecting-msg {
-      position: absolute;
-      color: #555;
-      font-size: 0.82rem;
-      pointer-events: none;
-      z-index: 1;
-      text-align: center;
-      padding: 8px;
-    }
   </style>
 </head>
 <body>
@@ -218,6 +219,10 @@
 <header>
   <h1>Reolink Viewer</h1>
   <span id="cam-count"></span>
+  <div id="stream-btns">
+    <button data-stream="main" class="active">Main</button>
+    <button data-stream="sub">Sub</button>
+  </div>
   <div id="layout-btns"></div>
   <a href="/settings.html" id="settings-btn" title="Camera setup">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -228,58 +233,31 @@
 <div id="grid"></div>
 
 <script>
-// ── WebRTC ────────────────────────────────────────────────────────────────────
-// go2rtc uses WebSocket signalling at /api/ws — server sends offer, client answers.
-// WebSocket connections don't have fetch()-style CORS restrictions so we connect
-// directly to go2rtc's port without needing a proxy.
+// ── Stream state ─────────────────────────────────────────────────────────────
 
-const _pcs = {};  // camId → RTCPeerConnection
-const _wss = {};  // camId → WebSocket
+let activeStream = 'main';
+let go2rtcPort = 1984;
 
-function connectWebRTC(cam, videoEl) {
-  // Tear down any existing connection for this cam
-  if (_pcs[cam.id]) { _pcs[cam.id].close(); delete _pcs[cam.id]; }
-  if (_wss[cam.id]) { _wss[cam.id].close(); delete _wss[cam.id]; }
-
-  const pc = new RTCPeerConnection({ iceServers: [] });
-  _pcs[cam.id] = pc;
-
-  pc.ontrack = e => {
-    if (!videoEl.srcObject) videoEl.srcObject = e.streams[0];
-  };
-
-  // Trickle ICE — send candidates to go2rtc as they're gathered
-  pc.onicecandidate = e => {
-    if (e.candidate && _wss[cam.id]?.readyState === WebSocket.OPEN) {
-      _wss[cam.id].send(JSON.stringify({ type: 'webrtc/candidate', value: e.candidate.candidate }));
-    }
-  };
-
-  const ws = new WebSocket(`ws://${location.hostname}:${cam.go2rtc_port}/api/ws?src=${cam.id}`);
-  _wss[cam.id] = ws;
-
-  ws.onmessage = async ({ data }) => {
-    const msg = JSON.parse(data);
-    if (msg.type === 'webrtc/offer') {
-      await pc.setRemoteDescription({ type: 'offer', sdp: msg.value });
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
-      ws.send(JSON.stringify({ type: 'webrtc/answer', value: answer.sdp }));
-    } else if (msg.type === 'webrtc/candidate') {
-      await pc.addIceCandidate({ candidate: msg.value, sdpMid: '0', sdpMLineIndex: 0 }).catch(() => {});
-    }
-  };
-
-  ws.onerror = e => console.error(`WebRTC WS error ${cam.id}:`, e);
-
-  ws.onclose = () => {
-    // Reconnect if this is still the active connection
-    if (_wss[cam.id] === ws) {
-      delete _wss[cam.id];
-      setTimeout(() => connectWebRTC(cam, videoEl), 3000);
-    }
-  };
+function streamSrc(camId) {
+  return `ws://${location.hostname}:${go2rtcPort}/api/ws?src=${camId}_${activeStream}`;
 }
+
+function setStream(stream) {
+  if (stream === activeStream) return;
+  activeStream = stream;
+  document.querySelectorAll('#stream-btns button').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.stream === stream);
+  });
+  // Update all video-stream / video-rtc elements to the new stream variant
+  document.querySelectorAll('[data-cam-id]').forEach(el => {
+    el.src = streamSrc(el.dataset.camId);
+  });
+}
+
+document.getElementById('stream-btns').addEventListener('click', e => {
+  const btn = e.target.closest('button[data-stream]');
+  if (btn) setStream(btn.dataset.stream);
+});
 
 // ── PTZ ──────────────────────────────────────────────────────────────────────
 
@@ -311,7 +289,7 @@ async function handlePtzClick(e, overlay, camId) {
 const _digitalZoom  = {};  // camId → {scale, tx, ty}
 const _opticalQueue = {};  // camId → {dir, steps, timer}
 
-function applyDigitalZoom(e, overlay, videoEl, camId) {
+function applyDigitalZoom(e, overlay, vsEl, camId) {
   const factor = e.deltaY < 0 ? 1.12 : (1 / 1.12);
   const state  = _digitalZoom[camId] || { scale: 1, tx: 0, ty: 0 };
   const next   = Math.max(1.0, Math.min(8.0, state.scale * factor));
@@ -331,8 +309,8 @@ function applyDigitalZoom(e, overlay, videoEl, camId) {
   ty = Math.max(-maxY, Math.min(maxY, ty));
 
   _digitalZoom[camId] = { scale: next, tx, ty };
-  videoEl.style.transformOrigin = 'center center';
-  videoEl.style.transform = next === 1 ? '' : `translate(${tx}px, ${ty}px) scale(${next})`;
+  vsEl.style.transformOrigin = 'center center';
+  vsEl.style.transform = next === 1 ? '' : `translate(${tx}px, ${ty}px) scale(${next})`;
 }
 
 function queueOpticalZoom(e, camId) {
@@ -355,10 +333,10 @@ function queueOpticalZoom(e, camId) {
   }, 120);
 }
 
-function handleScroll(e, overlay, videoEl, camId) {
+function handleScroll(e, overlay, vsEl, camId) {
   e.preventDefault();
   if (e.buttons & 2) queueOpticalZoom(e, camId);
-  else applyDigitalZoom(e, overlay, videoEl, camId);
+  else applyDigitalZoom(e, overlay, vsEl, camId);
 }
 
 // ── Layout ────────────────────────────────────────────────────────────────────
@@ -382,19 +360,12 @@ function buildCard(cam) {
   const wrap = document.createElement('div');
   wrap.className = 'cam-wrap';
 
-  const video = document.createElement('video');
-  video.autoplay = true;
-  video.muted = true;
-  video.playsInline = true;
-  wrap.appendChild(video);
-
-  const connecting = document.createElement('div');
-  connecting.className = 'connecting-msg';
-  connecting.textContent = 'Connecting…';
-  wrap.appendChild(connecting);
-  video.addEventListener('playing', () => connecting.remove(), { once: true });
-
-  connectWebRTC(cam, video);
+  // Prefer video-stream (go2rtc combined component) — fall back to video-rtc
+  const tagName = customElements.get('video-stream') ? 'video-stream' : 'video-rtc';
+  const vs = document.createElement(tagName);
+  vs.dataset.camId = cam.id;
+  vs.src = streamSrc(cam.id);
+  wrap.appendChild(vs);
 
   const label = document.createElement('div');
   label.className = 'cam-label';
@@ -415,7 +386,7 @@ function buildCard(cam) {
     overlay.className = 'ptz-overlay';
     overlay.title = 'Click to pan / tilt';
     overlay.addEventListener('click', e => handlePtzClick(e, overlay, cam.id));
-    overlay.addEventListener('wheel', e => handleScroll(e, overlay, video, cam.id), { passive: false });
+    overlay.addEventListener('wheel', e => handleScroll(e, overlay, vs, cam.id), { passive: false });
     overlay.addEventListener('contextmenu', e => e.preventDefault());
     wrap.appendChild(overlay);
 
@@ -472,8 +443,16 @@ async function buildPresetBar(cam, wrap) {
 }
 
 async function init() {
+  // Wait for video-stream (or video-rtc) custom element to register
+  await Promise.race([
+    customElements.whenDefined('video-stream'),
+    customElements.whenDefined('video-rtc'),
+  ]).catch(() => {});
+
   const cameras = await (await fetch('/cameras')).json();
   const n = cameras.length;
+
+  if (cameras.length > 0) go2rtcPort = cameras[0].go2rtc_port;
 
   document.getElementById('cam-count').textContent = `${n} camera${n !== 1 ? 's' : ''}`;
 
@@ -490,17 +469,6 @@ async function init() {
 
   const grid = document.getElementById('grid');
   cameras.forEach(cam => grid.appendChild(buildCard(cam)));
-
-  // On tab focus, reconnect any stalled streams
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden) return;
-    cameras.forEach(cam => {
-      const video = document.querySelector(`#grid .cam-wrap:nth-child(${cameras.indexOf(cam) + 1}) video`);
-      if (video && (!video.srcObject || video.readyState === 0)) {
-        connectWebRTC(cam, video).catch(console.error);
-      }
-    });
-  });
 }
 
 init().catch(console.error);
