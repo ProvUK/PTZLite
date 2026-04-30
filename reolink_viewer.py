@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Version: 3.5
+# Version: 3.6
 # Updated: 2026-04-30
 # v1.0 - 2026-04-28 - Initial stable release: go2rtc streaming, PTZ click-to-centre,
 #                     sequential pan+tilt, optical zoom, presets, serialized NVR API
@@ -32,6 +32,8 @@
 # v3.3 - 2026-04-30 - Fix camera PUT to merge rather than replace (preserves custom config fields)
 # v3.4 - 2026-04-30 - Fix Dahua PositionABS zooming in: arg3 is zoom position not speed; omit it
 # v3.5 - 2026-04-30 - PositionABS requires arg3 (400 without it); default to 0 (min zoom);
+# v3.6 - 2026-04-30 - Fix click latency: skip getStatus when position already known;
+#                     cache urllib digest-auth opener per NVR (reuses nonce + TCP connection)
 #                     configurable via dahua_click_zoom in config.yaml
 #                     falls back to configured dahua_default_pan/tilt then timed ONVIF
 """
@@ -314,28 +316,39 @@ async def _ptz_stop(cam: dict):
 # Workaround: software-track position after every successful PositionABS command.
 # Seed with dahua_default_pan / dahua_default_tilt in config.yaml if known.
 
-# cam_id → (pan_deg, tilt_deg) after last successful PositionABS; None = unknown
+# cam_id → (pan_deg, tilt_deg) after last successful PositionABS
 _dahua_tracked_pos: dict[str, tuple[float, float]] = {}
 
 _dahua_ssl_ctx = ssl.create_default_context()
 _dahua_ssl_ctx.check_hostname = False
 _dahua_ssl_ctx.verify_mode = ssl.CERT_NONE
 
+# Persistent opener per NVR key — reuses digest-auth nonce and TCP connection
+_dahua_openers: dict[str, urllib.request.OpenerDirector] = {}
+
+
+def _get_dahua_opener(cam: dict) -> urllib.request.OpenerDirector:
+    key = f"{cam['ip']}:{cam.get('port', 80)}:{cam['username']}"
+    if key not in _dahua_openers:
+        port = cam.get("port", 80)
+        scheme = "https" if port == 443 or cam.get("https") else "http"
+        base_url = f"{scheme}://{cam['ip']}:{port}/cgi-bin/ptz.cgi"
+        mgr = urllib.request.HTTPPasswordMgrWithDefaultRealm()
+        mgr.add_password(None, base_url, cam["username"], cam["password"])
+        _dahua_openers[key] = urllib.request.build_opener(
+            urllib.request.HTTPDigestAuthHandler(mgr),
+            urllib.request.HTTPSHandler(context=_dahua_ssl_ctx),
+        )
+    return _dahua_openers[key]
+
 
 def _dahua_cgi_sync(cam: dict, params: dict) -> tuple[int, str]:
-    """Synchronous Dahua CGI call with HTTP Digest auth. Run in executor."""
     port = cam.get("port", 80)
     scheme = "https" if port == 443 or cam.get("https") else "http"
     base_url = f"{scheme}://{cam['ip']}:{port}/cgi-bin/ptz.cgi"
-    full_url  = base_url + "?" + urllib.parse.urlencode(params)
-
-    mgr = urllib.request.HTTPPasswordMgrWithDefaultRealm()
-    mgr.add_password(None, base_url, cam["username"], cam["password"])
-    digest_handler = urllib.request.HTTPDigestAuthHandler(mgr)
-    https_handler  = urllib.request.HTTPSHandler(context=_dahua_ssl_ctx)
-    opener = urllib.request.build_opener(digest_handler, https_handler)
+    full_url = base_url + "?" + urllib.parse.urlencode(params)
     try:
-        with opener.open(full_url, timeout=5) as resp:
+        with _get_dahua_opener(cam).open(full_url, timeout=5) as resp:
             return resp.status, resp.read().decode("utf-8", errors="replace")
     except urllib.error.HTTPError as e:
         return e.code, ""
@@ -352,15 +365,32 @@ async def _dahua_cgi(cam: dict, params: dict) -> tuple[int, str]:
 async def _dahua_get_position(cam: dict) -> tuple[float, float] | None:
     """Returns (pan_deg, tilt_deg) current camera position, or None if unknown.
 
-    Priority:
-      1. CGI getStatus (live readback — works on some firmware)
-      2. Software-tracked position (set after each successful PositionABS)
-      3. dahua_default_pan / dahua_default_tilt from config (user-supplied seed)
-    """
-    cam_id  = cam["id"]
-    channel = cam.get("channel", 1)
+    Fast paths (no network call):
+      1. Software-tracked position (updated after each successful PositionABS)
+      2. dahua_default_pan / dahua_default_tilt from config.yaml
 
-    # 1. Try live CGI readback
+    Slow path (only when we have no position at all):
+      3. CGI getStatus — works on some firmware; many NVRs return 400
+    """
+    cam_id = cam["id"]
+
+    # 1. Tracked position — set after every PositionABS, no network needed
+    tracked = _dahua_tracked_pos.get(cam_id)
+    if tracked is not None:
+        print(f"Dahua {cam_id}: tracked ({tracked[0]:.1f}°, {tracked[1]:.1f}°)")
+        return tracked
+
+    # 2. Configured default — seed for first click after app start, no network needed
+    dp = cam.get("dahua_default_pan")
+    dt = cam.get("dahua_default_tilt")
+    if dp is not None and dt is not None:
+        pos = (float(dp), float(dt))
+        print(f"Dahua {cam_id}: default ({pos[0]:.1f}°, {pos[1]:.1f}°)")
+        return pos
+
+    # 3. Slow path: CGI getStatus — only reached when we have no position at all.
+    #    Many NVRs return 400 for IP camera channels; on success seeds the tracker.
+    channel = cam.get("channel", 1)
     try:
         status, text = await _dahua_cgi(cam, {"action": "getStatus", "channel": channel})
         if status == 200:
@@ -377,25 +407,10 @@ async def _dahua_get_position(cam: dict) -> tuple[float, float] | None:
             if pan is not None and tilt is not None:
                 _dahua_tracked_pos[cam_id] = (pan, tilt)
                 return pan, tilt
-            print(f"Dahua getStatus: could not parse pan/tilt from: {text!r}")
         else:
             print(f"Dahua getStatus HTTP {status}")
     except Exception as e:
         print(f"Dahua getStatus error: {e}")
-
-    # 2. Software-tracked position (updated after every successful PositionABS)
-    tracked = _dahua_tracked_pos.get(cam_id)
-    if tracked is not None:
-        print(f"Dahua {cam_id}: using tracked position ({tracked[0]:.1f}°, {tracked[1]:.1f}°)")
-        return tracked
-
-    # 3. User-configured default (seed position for first click after app start)
-    dp = cam.get("dahua_default_pan")
-    dt = cam.get("dahua_default_tilt")
-    if dp is not None and dt is not None:
-        pos = (float(dp), float(dt))
-        print(f"Dahua {cam_id}: using configured default position ({pos[0]:.1f}°, {pos[1]:.1f}°)")
-        return pos
 
     return None
 
