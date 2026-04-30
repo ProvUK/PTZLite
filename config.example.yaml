@@ -1,17 +1,31 @@
 cameras:
   - id: front_door          # unique slug used in URLs
     name: Front Door        # display name in viewer
+    brand: reolink          # reolink (default) or dahua
     ip: 192.168.0.100       # camera or NVR IP
     port: 443               # 443 for HTTPS, 80 for HTTP
     username: admin
     password: your_password_here
-    channel: 0              # 0 for single cameras; NVR channel index for multi-cam
+    channel: 0              # Reolink: 0-indexed (0 = first cam); Dahua: 1-indexed (1 = first cam)
     stream: sub             # sub (low bandwidth) or main (full res)
     playback: false         # true if camera records to an NVR/hub (enables jump-back)
 
-  # PTZ camera example
+  # Dahua camera/NVR example
+  - id: dahua_front
+    name: Dahua Front
+    brand: dahua
+    ip: 192.168.0.102
+    port: 80
+    username: admin
+    password: your_password_here
+    channel: 1              # Dahua channels are 1-indexed
+    stream: sub
+    playback: false
+
+  # PTZ camera example (Reolink)
   - id: garden_ptz
     name: Garden PTZ
+    brand: reolink
     ip: 192.168.0.101
     port: 443
     username: admin

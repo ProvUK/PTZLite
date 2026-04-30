@@ -269,6 +269,15 @@
 
       <div class="form-section">
         <p class="form-section-title">Connection</p>
+        <div class="form-row single">
+          <div class="field">
+            <label for="f-brand">Camera brand</label>
+            <select id="f-brand" onchange="onBrandChange()">
+              <option value="reolink">Reolink</option>
+              <option value="dahua">Dahua</option>
+            </select>
+          </div>
+        </div>
         <div class="form-row">
           <div class="field">
             <label for="f-ip">IP address</label>
@@ -300,7 +309,7 @@
           <div class="field">
             <label for="f-channel">Channel</label>
             <input type="number" id="f-channel" value="0" min="0" max="63">
-            <span class="field-hint">0 for single cameras; NVR channel index for multi-camera</span>
+            <span class="field-hint" id="f-channel-hint">0 for single cameras; NVR channel index for multi-camera</span>
           </div>
           <div class="field">
             <label for="f-stream">Quality</label>
@@ -383,6 +392,7 @@
     <div class="modal-footer">
       <button class="btn btn-primary" id="save-btn" onclick="saveCamera()">Save</button>
       <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-secondary" id="test-btn" onclick="testCamera()">Test connection</button>
       <button class="btn btn-danger" id="delete-btn" onclick="deleteCamera()" style="display:none">Delete camera</button>
     </div>
   </div>
@@ -428,6 +438,7 @@ function v(id) { return document.getElementById(id); }
 function clearForm() {
   v('f-name').value = '';
   v('f-id').value = '';
+  v('f-brand').value = 'reolink';
   v('f-ip').value = '';
   v('f-port').value = '443';
   v('f-username').value = 'admin';
@@ -445,12 +456,14 @@ function clearForm() {
   v('f-monitor-preset').value = '';
   v('f-pan-invert').checked = false;
   v('f-tilt-invert').checked = false;
+  onBrandChange();
   togglePtz();
 }
 
 function fillForm(cam) {
   v('f-name').value = cam.name ?? '';
   v('f-id').value = cam.id ?? '';
+  v('f-brand').value = cam.brand ?? 'reolink';
   v('f-ip').value = cam.ip ?? '';
   v('f-port').value = cam.port ?? 443;
   v('f-username').value = cam.username ?? '';
@@ -468,6 +481,7 @@ function fillForm(cam) {
   v('f-monitor-preset').value = cam.monitor_preset != null ? cam.monitor_preset : '';
   v('f-pan-invert').checked = !!cam.pan_invert;
   v('f-tilt-invert').checked = !!cam.tilt_invert;
+  onBrandChange();
   togglePtz();
 }
 
@@ -477,6 +491,7 @@ function formData() {
   const d = {
     id:       v('f-id').value.trim(),
     name:     v('f-name').value.trim(),
+    brand:    v('f-brand').value,
     ip:       v('f-ip').value.trim(),
     port:     parseInt(v('f-port').value) || 443,
     username: v('f-username').value.trim(),
@@ -504,6 +519,16 @@ function togglePtz() {
   document.getElementById('ptz-fields').classList.toggle('visible', v('f-ptz').checked);
 }
 
+function onBrandChange() {
+  const brand = v('f-brand').value;
+  if (brand === 'dahua') {
+    v('f-channel-hint').textContent = 'Channel number 1–32 (1 = first camera)';
+    if (!_editId && parseInt(v('f-channel').value) === 0) v('f-channel').value = '1';
+  } else {
+    v('f-channel-hint').textContent = '0 for single cameras; NVR channel index for multi-camera';
+  }
+}
+
 function togglePw() {
   const inp = v('f-password');
   const btn = document.querySelector('.pw-toggle');
@@ -520,10 +545,52 @@ v('f-name').addEventListener('input', () => {
 
 // ── Save / Delete ─────────────────────────────────────────────────────────────
 
+async function testCamera(silent = false) {
+  const ip = v('f-ip').value.trim();
+  if (!ip) {
+    if (!silent) showToast('Enter an IP address first', true);
+    return null;
+  }
+  const testBtn = document.getElementById('test-btn');
+  if (testBtn) { testBtn.disabled = true; testBtn.textContent = 'Testing…'; }
+  try {
+    const result = await fetch('/api/cameras/test', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ip }),
+    }).then(r => r.json());
+    if (!silent) {
+      if (result.ok) showToast('✓ ' + result.message);
+      else showToast('✗ ' + result.error, true);
+    }
+    return result;
+  } catch (e) {
+    if (!silent) showToast('Test request failed', true);
+    return { ok: false, error: 'Request failed' };
+  } finally {
+    if (testBtn) { testBtn.disabled = false; testBtn.textContent = 'Test connection'; }
+  }
+}
+
 async function saveCamera() {
   const data = formData();
   if (!data.id || !data.name || !data.ip) {
     showToast('Name, ID and IP are required', true); return;
+  }
+
+  const saveBtn = document.getElementById('save-btn');
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Testing…';
+  const testResult = await testCamera(true);
+  saveBtn.disabled = false;
+  saveBtn.textContent = 'Save';
+
+  if (testResult && !testResult.ok) {
+    const proceed = confirm(
+      'Connection test failed:\n' + testResult.error +
+      '\n\nSave anyway? The app will keep retrying until the camera responds.'
+    );
+    if (!proceed) return;
   }
 
   const url    = _editId ? `/api/cameras/${_editId}` : '/api/cameras';
@@ -610,6 +677,10 @@ function openAddFromDiscovery(ip, model) {
   if (model) {
     v('f-name').value = model;
     v('f-id').value = model.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+    if (/dahua|dh-/i.test(model)) {
+      v('f-brand').value = 'dahua';
+      onBrandChange();
+    }
   }
 }
 
@@ -628,8 +699,9 @@ async function loadCameras() {
     card.className = 'cam-card';
     const meta = [`${cam.ip}:${cam.port ?? 443}`, `ch ${cam.channel ?? 0}`, cam.stream ?? 'sub']
       .map(s => `<span>${s}</span>`).join('');
+    const brandBadge = cam.brand === 'dahua' ? '<span class="badge" style="background:#f97316">Dahua</span>' : '';
     card.innerHTML = `
-      <div class="cam-card-name">${cam.name}${cam.ptz ? '<span class="badge">PTZ</span>' : ''}</div>
+      <div class="cam-card-name">${cam.name}${brandBadge}${cam.ptz ? '<span class="badge">PTZ</span>' : ''}</div>
       <div class="cam-card-meta">${meta}</div>`;
     card.addEventListener('click', () => openEdit(cam));
     grid.insertBefore(card, addBtn);
