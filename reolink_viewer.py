@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Version: 3.3
+# Version: 3.4
 # Updated: 2026-04-30
 # v1.0 - 2026-04-28 - Initial stable release: go2rtc streaming, PTZ click-to-centre,
 #                     sequential pan+tilt, optical zoom, presets, serialized NVR API
@@ -30,6 +30,7 @@
 # v3.1 - 2026-04-30 - Software position tracking for NVRs where getStatus returns 400;
 # v3.2 - 2026-04-30 - Suppress favicon 404; reset Dahua invert flags (wrong for PositionABS)
 # v3.3 - 2026-04-30 - Fix camera PUT to merge rather than replace (preserves custom config fields)
+# v3.4 - 2026-04-30 - Fix Dahua PositionABS zooming in: arg3 is zoom position not speed; omit it
 #                     falls back to configured dahua_default_pan/tilt then timed ONVIF
 """
 Reolink camera viewer with click-to-pan PTZ control.
@@ -397,7 +398,9 @@ async def _dahua_get_position(cam: dict) -> tuple[float, float] | None:
     return None
 
 
-async def _dahua_position_abs(cam: dict, pan: float, tilt: float, speed: int = 8) -> bool:
+async def _dahua_position_abs(cam: dict, pan: float, tilt: float) -> bool:
+    # arg1=pan, arg2=tilt — no arg3: Dahua interprets arg3 as zoom position,
+    # so omitting it leaves the current zoom level unchanged
     channel = cam.get("channel", 1)
     status, _ = await _dahua_cgi(cam, {
         "action": "start",
@@ -405,7 +408,6 @@ async def _dahua_position_abs(cam: dict, pan: float, tilt: float, speed: int = 8
         "code": "PositionABS",
         "arg1": f"{pan:.2f}",
         "arg2": f"{tilt:.2f}",
-        "arg3": speed,
     })
     print(f"Dahua PositionABS → HTTP {status}, target pan={pan:.2f}° tilt={tilt:.2f}°")
     if status == 200:
