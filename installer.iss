@@ -1,5 +1,5 @@
 #define AppName    "Reolink Viewer"
-#define AppVersion "2.1"
+#define AppVersion "3.6"
 #define AppExe     "Reolink Viewer.exe"
 
 [Setup]
@@ -30,6 +30,8 @@ Name: "startup";     Description: "Start automatically &with Windows";      Grou
 [Files]
 ; Entire PyInstaller output folder — recurse so all DLLs and the static/ tree are included
 Source: "dist\Reolink Viewer\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; Ship config.example.yaml as config.yaml on first install only — never overwrite existing config
+Source: "config.example.yaml"; DestDir: "{app}"; DestName: "config.yaml"; Flags: onlyifdoesntexist uninsneveruninstall
 
 [Icons]
 Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExe}"
