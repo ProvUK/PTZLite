@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Version: 3.6
+# Version: 3.7
 # Updated: 2026-04-30
 # v1.0 - 2026-04-28 - Initial stable release: go2rtc streaming, PTZ click-to-centre,
 #                     sequential pan+tilt, optical zoom, presets, serialized NVR API
@@ -33,6 +33,7 @@
 # v3.4 - 2026-04-30 - Fix Dahua PositionABS zooming in: arg3 is zoom position not speed; omit it
 # v3.5 - 2026-04-30 - PositionABS requires arg3 (400 without it); default to 0 (min zoom);
 # v3.6 - 2026-04-30 - Fix click latency: skip getStatus when position already known;
+# v3.7 - 2026-04-30 - Move go2rtc.exe to bin\ subdir; disable go2rtc built-in web UI
 #                     cache urllib digest-auth opener per NVR (reuses nonce + TCP connection)
 #                     configurable via dahua_click_zoom in config.yaml
 #                     falls back to configured dahua_default_pan/tilt then timed ONVIF
@@ -93,7 +94,7 @@ else:
 
 BASE        = _USER_DIR
 CONFIG_PATH = BASE / "config.yaml"
-GO2RTC_BIN  = BASE / "go2rtc.exe"
+GO2RTC_BIN  = BASE / "bin" / "go2rtc.exe"
 GO2RTC_PORT = 1984
 _STATIC_DIR = _BUNDLE_DIR / "static"
 
@@ -175,7 +176,7 @@ def start_go2rtc():
 
     go2rtc_cfg = {
         "streams": streams,
-        "api": {"listen": f":{GO2RTC_PORT}", "origin": "*"},
+        "api": {"listen": f":{GO2RTC_PORT}", "origin": "*", "static_dir": ""},
         "log": {"level": "warn"},
         "rtsp": {"listen": ""},
     }
@@ -944,7 +945,7 @@ def _reload_go2rtc():
 
     go2rtc_cfg = {
         "streams": streams,
-        "api": {"listen": f":{GO2RTC_PORT}", "origin": "*"},
+        "api": {"listen": f":{GO2RTC_PORT}", "origin": "*", "static_dir": ""},
         "log": {"level": "warn"},
         "rtsp": {"listen": ""},
     }

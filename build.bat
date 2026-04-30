@@ -33,8 +33,9 @@ if exist "dist\Reolink Viewer" rmdir /s /q "dist\Reolink Viewer"
     reolink_viewer.py
 if errorlevel 1 ( echo PyInstaller failed & pause & exit /b 1 )
 
-echo Copying go2rtc into dist...
-copy /Y go2rtc.exe "dist\Reolink Viewer\" >nul
+echo Copying go2rtc into dist\bin\...
+if not exist "dist\Reolink Viewer\bin" mkdir "dist\Reolink Viewer\bin"
+copy /Y go2rtc.exe "dist\Reolink Viewer\bin\" >nul
 rem Note: config.yaml is NOT bundled (contains credentials).
 rem       Inno Setup ships config.example.yaml as config.yaml for first-time installs.
 
