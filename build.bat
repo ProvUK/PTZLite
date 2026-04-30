@@ -30,6 +30,10 @@ if exist "dist\Reolink Viewer" rmdir /s /q "dist\Reolink Viewer"
     --add-data "static;static" ^
     --hidden-import "pystray._win32" ^
     --hidden-import "PIL._imaging" ^
+    --collect-all "uvicorn" ^
+    --collect-all "starlette" ^
+    --collect-all "fastapi" ^
+    --collect-all "anyio" ^
     reolink_viewer.py
 if errorlevel 1 ( echo PyInstaller failed & pause & exit /b 1 )
 

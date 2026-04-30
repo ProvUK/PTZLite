@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Version: 3.8
+# Version: 3.9
 # Updated: 2026-04-30
 # v1.0 - 2026-04-28 - Initial stable release: go2rtc streaming, PTZ click-to-centre,
 #                     sequential pan+tilt, optical zoom, presets, serialized NVR API
@@ -35,6 +35,7 @@
 # v3.6 - 2026-04-30 - Fix click latency: skip getStatus when position already known;
 # v3.7 - 2026-04-30 - Move go2rtc.exe to bin\ subdir; disable go2rtc built-in web UI
 # v3.8 - 2026-04-30 - Fix frozen app: CREATE_NO_WINDOW for go2rtc; freeze_support();
+# v3.9 - 2026-04-30 - Write startup_error.log on crash (no console in frozen app);
 #                     WindowsSelectorEventLoopPolicy so uvicorn starts correctly
 #                     cache urllib digest-auth opener per NVR (reuses nonce + TCP connection)
 #                     configurable via dahua_click_zoom in config.yaml
@@ -1350,7 +1351,14 @@ def _run_uvicorn(port: int):
     # breaks uvicorn's signal handling and causes silent startup failure
     if sys.platform == "win32":
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-    uvicorn.run(app, host="0.0.0.0", port=port, log_level="warning")
+    try:
+        uvicorn.run(app, host="0.0.0.0", port=port, log_level="warning")
+    except Exception:
+        import traceback
+        log_path = _USER_DIR / "startup_error.log"
+        with open(log_path, "w") as f:
+            traceback.print_exc(file=f)
+        raise
 
 
 def _main_tray(port: int):
@@ -1406,7 +1414,13 @@ def main():
             # pystray / Pillow not installed — fall back to visible console
             uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")
     except Exception as e:
-        print(f"\nERROR: {e}")
+        import traceback
+        log_path = _USER_DIR / "startup_error.log"
+        with open(log_path, "w") as f:
+            traceback.print_exc(file=f)
+            f.write(f"\nERROR: {e}\n")
+        # If we have a console show it there too; if not the log file is the fallback
+        print(f"\nERROR: {e}\nDetails written to {log_path}")
         input("\nPress Enter to close...")
 
 
