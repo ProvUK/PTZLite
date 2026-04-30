@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Version: 3.2
+# Version: 3.3
 # Updated: 2026-04-30
 # v1.0 - 2026-04-28 - Initial stable release: go2rtc streaming, PTZ click-to-centre,
 #                     sequential pan+tilt, optical zoom, presets, serialized NVR API
@@ -29,6 +29,7 @@
 #                     reads current pan/tilt via getStatus then moves to computed absolute target
 # v3.1 - 2026-04-30 - Software position tracking for NVRs where getStatus returns 400;
 # v3.2 - 2026-04-30 - Suppress favicon 404; reset Dahua invert flags (wrong for PositionABS)
+# v3.3 - 2026-04-30 - Fix camera PUT to merge rather than replace (preserves custom config fields)
 #                     falls back to configured dahua_default_pan/tilt then timed ONVIF
 """
 Reolink camera viewer with click-to-pan PTZ control.
@@ -986,7 +987,10 @@ async def api_update_camera(cam_id: str, request: Request):
         raise HTTPException(409, f"Camera '{new_id}' already exists")
 
     old_cam = _config["cameras"][idx]
-    _config["cameras"][idx] = data
+    # Merge: preserve existing fields not present in the incoming payload
+    # (e.g. onvif_profile, dahua_default_pan — custom fields the settings UI doesn't know about)
+    merged = {**old_cam, **data}
+    _config["cameras"][idx] = merged
     _save_config()
 
     # Invalidate cached token if connection details changed
