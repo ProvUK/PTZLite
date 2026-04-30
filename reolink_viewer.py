@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Version: 3.7
+# Version: 3.8
 # Updated: 2026-04-30
 # v1.0 - 2026-04-28 - Initial stable release: go2rtc streaming, PTZ click-to-centre,
 #                     sequential pan+tilt, optical zoom, presets, serialized NVR API
@@ -34,6 +34,8 @@
 # v3.5 - 2026-04-30 - PositionABS requires arg3 (400 without it); default to 0 (min zoom);
 # v3.6 - 2026-04-30 - Fix click latency: skip getStatus when position already known;
 # v3.7 - 2026-04-30 - Move go2rtc.exe to bin\ subdir; disable go2rtc built-in web UI
+# v3.8 - 2026-04-30 - Fix frozen app: CREATE_NO_WINDOW for go2rtc; freeze_support();
+#                     WindowsSelectorEventLoopPolicy so uvicorn starts correctly
 #                     cache urllib digest-auth opener per NVR (reuses nonce + TCP connection)
 #                     configurable via dahua_click_zoom in config.yaml
 #                     falls back to configured dahua_default_pan/tilt then timed ONVIF
@@ -188,6 +190,7 @@ def start_go2rtc():
     _go2rtc_proc = subprocess.Popen(
         [str(GO2RTC_BIN), "-config", str(cfg_file)],
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        creationflags=subprocess.CREATE_NO_WINDOW,
     )
     threading.Thread(target=_drain_go2rtc_output, args=(_go2rtc_proc,), daemon=True).start()
     atexit.register(stop_go2rtc)
@@ -963,6 +966,7 @@ def _reload_go2rtc():
     _go2rtc_proc = subprocess.Popen(
         [str(GO2RTC_BIN), "-config", str(cfg_file)],
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        creationflags=subprocess.CREATE_NO_WINDOW,
     )
     threading.Thread(target=_drain_go2rtc_output, args=(_go2rtc_proc,), daemon=True).start()
 
@@ -1342,6 +1346,10 @@ def _wait_for_server(port: int, timeout: float = 15.0) -> bool:
 
 
 def _run_uvicorn(port: int):
+    # Frozen apps on Windows need SelectorEventLoop — ProactorEventLoop (the 3.12+ default)
+    # breaks uvicorn's signal handling and causes silent startup failure
+    if sys.platform == "win32":
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
     uvicorn.run(app, host="0.0.0.0", port=port, log_level="warning")
 
 
@@ -1403,6 +1411,9 @@ def main():
 
 
 if __name__ == "__main__":
+    # Required for PyInstaller frozen apps on Windows: prevents worker re-spawn loop
+    import multiprocessing
+    multiprocessing.freeze_support()
     try:
         main()
     except Exception as e:
