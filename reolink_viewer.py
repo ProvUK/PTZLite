@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Version: 2.7
+# Version: 2.8
 # Updated: 2026-04-30
 # v1.0 - 2026-04-28 - Initial stable release: go2rtc streaming, PTZ click-to-centre,
 #                     sequential pan+tilt, optical zoom, presets, serialized NVR API
@@ -23,6 +23,7 @@
 # v2.6 - 2026-04-29 - Force RTSP over TCP (#rtsp_transport=tcp) to fix UDP RTP failure on Reolink NVRs
 # v2.7 - 2026-04-30 - ONVIF PTZ for non-Reolink cameras (Dahua etc): ContinuousMove/RelativeMove/Stop/
 #                     GetPresets/GotoPreset via SOAP; preset IDs unified as str across all brands
+# v2.8 - 2026-04-30 - Fix ONVIF click-to-centre: Dahua ignores RelativeMove; use timed ContinuousMove+Stop
 """
 Reolink camera viewer with click-to-pan PTZ control.
 
@@ -450,17 +451,26 @@ async def ptz_click(cam_id: str, click: ClickPayload):
     pc = _ptz_cam(cam)
 
     if _is_onvif(cam):
-        # ONVIF: RelativeMove with normalized -1..1 translation
-        pan_n  = want_pan  / cam.get("onvif_pan_range",  180.0)
-        tilt_n = want_tilt / cam.get("onvif_tilt_range",  90.0)
-        if cam.get("pan_invert",  False): pan_n  = -pan_n
-        if cam.get("tilt_invert", False): tilt_n = -tilt_n
-        pan_n  = max(-1.0, min(1.0, pan_n))
-        tilt_n = max(-1.0, min(1.0, tilt_n))
+        # Dahua (and most ONVIF NVRs) don't honour RelativeMove — use timed ContinuousMove instead.
+        # Normalize velocity to -1..1, run for a duration proportional to degrees, then stop.
+        spd = cam.get("ptz_speed", 40) / 63.0
+        if cam.get("pan_invert",  False): want_pan  = -want_pan
+        if cam.get("tilt_invert", False): want_tilt = -want_tilt
+        dps = cam.get("ptz_degrees_per_second", 20)
         print(f"PTZ ONVIF {cam['id']}: click=({click.x:.2f},{click.y:.2f}) "
-              f"pan_n={pan_n:.3f} tilt_n={tilt_n:.3f}")
-        await _onvif_relative(pc, pan_n, tilt_n)
-        return {"ok": True, "mode": "onvif_relative"}
+              f"pan={want_pan:.1f}° tilt={want_tilt:.1f}°")
+
+        async def _onvif_timed_axis(pan_v: float, tilt_v: float, degrees: float):
+            duration_s = max(0.1, degrees / dps)
+            await _onvif_continuous(pc, pan=pan_v * spd, tilt=tilt_v * spd)
+            await asyncio.sleep(duration_s)
+            await _onvif_stop(pc)
+
+        if abs(want_pan) > 0.5:
+            await _onvif_timed_axis(1.0 if want_pan > 0 else -1.0, 0.0, abs(want_pan))
+        if abs(want_tilt) > 0.5:
+            await _onvif_timed_axis(0.0, 1.0 if want_tilt > 0 else -1.0, abs(want_tilt))
+        return {"ok": True, "mode": "onvif_timed"}
 
     ptz_speed = cam.get("ptz_speed", 20)
 
