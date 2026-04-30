@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-# Version: 2.2
-# Updated: 2026-04-29
+# Version: 2.7
+# Updated: 2026-04-30
 # v1.0 - 2026-04-28 - Initial stable release: go2rtc streaming, PTZ click-to-centre,
 #                     sequential pan+tilt, optical zoom, presets, serialized NVR API
 # v1.1 - 2026-04-28 - Add camera management API (GET/POST/PUT/DELETE /api/cameras)
@@ -17,6 +17,12 @@
 # v2.0 - 2026-04-29 - Grid layouts (1x1/2x1/2x2) with pagination and per-camera fullscreen
 # v2.1 - 2026-04-29 - System tray icon (no CMD window); PyInstaller path handling; build.bat
 # v2.2 - 2026-04-29 - Playback: Search recordings + proxy download stream; per-camera opt-in
+# v2.3 - 2026-04-29 - Multi-brand RTSP: Dahua cam/realmonitor URL format; brand selector in settings
+# v2.4 - 2026-04-29 - RTSP connectivity test before saving cameras; blocks go2rtc hammering bad endpoints
+# v2.5 - 2026-04-29 - Capture go2rtc output; health/restart endpoints; stream offline detection
+# v2.6 - 2026-04-29 - Force RTSP over TCP (#rtsp_transport=tcp) to fix UDP RTP failure on Reolink NVRs
+# v2.7 - 2026-04-30 - ONVIF PTZ for non-Reolink cameras (Dahua etc): ContinuousMove/RelativeMove/Stop/
+#                     GetPresets/GotoPreset via SOAP; preset IDs unified as str across all brands
 """
 Reolink camera viewer with click-to-pan PTZ control.
 
@@ -34,8 +40,12 @@ go2rtc will be started automatically and stopped when the app exits.
 
 import asyncio
 import atexit
+import base64
+import collections
 import datetime
+import hashlib
 import math
+import os
 import re
 import socket
 import subprocess
@@ -85,14 +95,35 @@ cameras: dict[str, dict] = {c["id"]: c for c in _config["cameras"]}
 # ── go2rtc lifecycle ───────────────────────────────────────────────────────────
 
 _go2rtc_proc: subprocess.Popen | None = None
+_go2rtc_log: collections.deque = collections.deque(maxlen=150)
+
+
+def _drain_go2rtc_output(proc: subprocess.Popen):
+    """Reads go2rtc stdout+stderr into _go2rtc_log; exits when the process closes its pipe."""
+    try:
+        for raw in proc.stdout:  # type: ignore[union-attr]
+            _go2rtc_log.append(raw.decode("utf-8", errors="replace").rstrip())
+    except Exception:
+        pass
 
 
 def _rtsp_url(cam: dict, stream: str | None = None) -> str:
     ch = cam.get("channel", 0)
     s = stream if stream is not None else cam.get("stream", "main")
+    brand = cam.get("brand", "reolink").lower()
+    # #backchannel=0 disables two-way audio; #rtsp_transport=tcp forces TCP for RTP data
+    # (go2rtc defaults to UDP which many Reolink/Dahua NVRs silently drop, causing CONN-state loops)
+    _opts = "#backchannel=0#rtsp_transport=tcp"
+    if brand == "dahua":
+        subtype = 0 if s == "main" else 1
+        return (
+            f"rtsp://{cam['username']}:{cam['password']}"
+            f"@{cam['ip']}:554/cam/realmonitor?channel={ch}&subtype={subtype}{_opts}"
+        )
+    # Reolink: channel is 0-indexed in config, 1-indexed in URL
     return (
         f"rtsp://{cam['username']}:{cam['password']}"
-        f"@{cam['ip']}:554/h264Preview_{ch + 1:02d}_{s}"
+        f"@{cam['ip']}:554/h264Preview_{ch + 1:02d}_{s}{_opts}"
     )
 
 
@@ -139,7 +170,9 @@ def start_go2rtc():
 
     _go2rtc_proc = subprocess.Popen(
         [str(GO2RTC_BIN), "-config", str(cfg_file)],
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
     )
+    threading.Thread(target=_drain_go2rtc_output, args=(_go2rtc_proc,), daemon=True).start()
     atexit.register(stop_go2rtc)
 
     for _ in range(20):
@@ -252,6 +285,147 @@ async def _ptz_stop(cam: dict):
         "channel": cam.get("channel", 0), "op": "Stop", "speed": 1, "timeout": 0,
     }}])
 
+# ── ONVIF PTZ (Dahua / Hikvision / generic ONVIF cameras) ─────────────────────
+#
+# Reolink uses a proprietary HTTP API; everything else uses ONVIF SOAP.
+# No extra dependencies — requests are built manually with aiohttp.
+
+_ONVIF_SOAP_ATTRS = (
+    'xmlns:s="http://www.w3.org/2003/05/soap-envelope"'
+    ' xmlns:tptz="http://www.onvif.org/ver20/ptz/wsdl"'
+    ' xmlns:tt="http://www.onvif.org/ver10/schema"'
+)
+
+
+def _is_onvif(cam: dict) -> bool:
+    return cam.get("brand", "reolink").lower() != "reolink"
+
+
+def _onvif_profile(cam: dict) -> str:
+    # Dahua NVRs: "MediaProfile00000" = channel 1 main, "MediaProfile00008" = channel 2, etc.
+    # Set onvif_profile in config.yaml to override.
+    return cam.get("onvif_profile", "MediaProfile00000")
+
+
+def _onvif_ptz_path(cam: dict) -> str:
+    # Dahua uses /onvif/ptz_service; override with onvif_ptz_path in config.yaml for other brands.
+    return cam.get("onvif_ptz_path", "/onvif/ptz_service")
+
+
+def _onvif_envelope(cam: dict, body: str) -> str:
+    # WS-Security PasswordDigest: Base64(SHA-1(nonce_bytes + created_str + password))
+    # Required by Dahua PTZ service; PasswordText is rejected with NotAuthorized.
+    nonce_raw = os.urandom(16)
+    nonce_b64 = base64.b64encode(nonce_raw).decode()
+    created = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+    digest = base64.b64encode(
+        hashlib.sha1(nonce_raw + created.encode() + cam["password"].encode()).digest()
+    ).decode()
+    wsse = "http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd"
+    wsu  = "http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd"
+    pw_type = f"{wsse}#PasswordDigest"
+    nc_type = f"{wsse}#Base64Binary"
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>'
+        f'<s:Envelope {_ONVIF_SOAP_ATTRS}>'
+        '<s:Header>'
+        f'<wsse:Security xmlns:wsse="{wsse}" xmlns:wsu="{wsu}">'
+        '<wsse:UsernameToken>'
+        f'<wsse:Username>{cam["username"]}</wsse:Username>'
+        f'<wsse:Password Type="{pw_type}">{digest}</wsse:Password>'
+        f'<wsse:Nonce EncodingType="{nc_type}">{nonce_b64}</wsse:Nonce>'
+        f'<wsu:Created>{created}</wsu:Created>'
+        '</wsse:UsernameToken>'
+        '</wsse:Security>'
+        '</s:Header>'
+        f'<s:Body>{body}</s:Body>'
+        '</s:Envelope>'
+    )
+
+
+async def _onvif_post(cam: dict, action: str, body: str) -> str:
+    port = cam.get("port", 80)
+    scheme = "https" if port == 443 or cam.get("https") else "http"
+    path = _onvif_ptz_path(cam)
+    url = f"{scheme}://{cam['ip']}:{port}{path}"
+    envelope = _onvif_envelope(cam, body).encode("utf-8")
+    headers = {
+        "Content-Type": "application/soap+xml; charset=utf-8",
+        "SOAPAction": f'"http://www.onvif.org/ver20/ptz/wsdl/{action}"',
+    }
+    async with aiohttp.ClientSession() as session:
+        async with session.post(
+            url, data=envelope, headers=headers, ssl=False,
+            timeout=aiohttp.ClientTimeout(total=8),
+        ) as resp:
+            return await resp.text()
+
+
+async def _onvif_continuous(cam: dict, pan: float = 0.0, tilt: float = 0.0, zoom: float = 0.0):
+    pt = f'<tt:PanTilt x="{pan:.3f}" y="{tilt:.3f}"/>' if pan or tilt else ""
+    z  = f'<tt:Zoom x="{zoom:.3f}"/>' if zoom else ""
+    body = (
+        f"<tptz:ContinuousMove>"
+        f"<tptz:ProfileToken>{_onvif_profile(cam)}</tptz:ProfileToken>"
+        f"<tptz:Velocity>{pt}{z}</tptz:Velocity>"
+        f"</tptz:ContinuousMove>"
+    )
+    await _onvif_post(cam, "ContinuousMove", body)
+
+
+async def _onvif_relative(cam: dict, pan: float, tilt: float):
+    body = (
+        f"<tptz:RelativeMove>"
+        f"<tptz:ProfileToken>{_onvif_profile(cam)}</tptz:ProfileToken>"
+        f"<tptz:Translation><tt:PanTilt x=\"{pan:.3f}\" y=\"{tilt:.3f}\"/></tptz:Translation>"
+        f"</tptz:RelativeMove>"
+    )
+    await _onvif_post(cam, "RelativeMove", body)
+
+
+async def _onvif_stop(cam: dict):
+    body = (
+        f"<tptz:Stop>"
+        f"<tptz:ProfileToken>{_onvif_profile(cam)}</tptz:ProfileToken>"
+        f"<tptz:PanTilt>true</tptz:PanTilt>"
+        f"<tptz:Zoom>true</tptz:Zoom>"
+        f"</tptz:Stop>"
+    )
+    await _onvif_post(cam, "Stop", body)
+
+
+async def _onvif_get_presets(cam: dict) -> list[dict]:
+    body = (
+        f"<tptz:GetPresets>"
+        f"<tptz:ProfileToken>{_onvif_profile(cam)}</tptz:ProfileToken>"
+        f"</tptz:GetPresets>"
+    )
+    xml_text = await _onvif_post(cam, "GetPresets", body)
+    try:
+        root = ET.fromstring(xml_text)
+        NS = "http://www.onvif.org/ver10/schema"
+        result = []
+        for preset in root.iter(f"{{{NS}}}Preset"):
+            token = preset.get("token", "")
+            name_el = preset.find(f"{{{NS}}}Name")
+            name = (name_el.text or f"Preset {token}") if name_el is not None else f"Preset {token}"
+            if token:
+                result.append({"id": token, "name": name})
+        return result
+    except Exception as e:
+        print(f"ONVIF GetPresets parse error: {e}")
+        return []
+
+
+async def _onvif_goto_preset(cam: dict, token: str):
+    body = (
+        f"<tptz:GotoPreset>"
+        f"<tptz:ProfileToken>{_onvif_profile(cam)}</tptz:ProfileToken>"
+        f"<tptz:PresetToken>{token}</tptz:PresetToken>"
+        f"</tptz:GotoPreset>"
+    )
+    await _onvif_post(cam, "GotoPreset", body)
+
 
 @app.post("/ptz/{cam_id}")
 async def ptz_click(cam_id: str, click: ClickPayload):
@@ -273,6 +447,21 @@ async def ptz_click(cam_id: str, click: ClickPayload):
     want_pan  =  dx * fov_h / 2
     want_tilt = -dy * fov_v / 2   # screen Y is inverted
 
+    pc = _ptz_cam(cam)
+
+    if _is_onvif(cam):
+        # ONVIF: RelativeMove with normalized -1..1 translation
+        pan_n  = want_pan  / cam.get("onvif_pan_range",  180.0)
+        tilt_n = want_tilt / cam.get("onvif_tilt_range",  90.0)
+        if cam.get("pan_invert",  False): pan_n  = -pan_n
+        if cam.get("tilt_invert", False): tilt_n = -tilt_n
+        pan_n  = max(-1.0, min(1.0, pan_n))
+        tilt_n = max(-1.0, min(1.0, tilt_n))
+        print(f"PTZ ONVIF {cam['id']}: click=({click.x:.2f},{click.y:.2f}) "
+              f"pan_n={pan_n:.3f} tilt_n={tilt_n:.3f}")
+        await _onvif_relative(pc, pan_n, tilt_n)
+        return {"ok": True, "mode": "onvif_relative"}
+
     ptz_speed = cam.get("ptz_speed", 20)
 
     sx = (1 if want_pan  > 0.5 else (-1 if want_pan  < -0.5 else 0))
@@ -290,7 +479,6 @@ async def ptz_click(cam_id: str, click: ClickPayload):
           f"want_pan={want_pan:.1f}° want_tilt={want_tilt:.1f}° "
           f"pan={pan_dir} tilt={tilt_dir}")
 
-    pc = _ptz_cam(cam)
     dps = cam.get("ptz_degrees_per_second", 20)
 
     async def _timed_axis(op: str, degrees: float):
@@ -326,6 +514,16 @@ async def ptz_joystick_start(cam_id: str, payload: JoystickPayload):
     if ax < 0.05 and ay < 0.05:
         return {"ok": True, "note": "deadzone"}
 
+    pc = _ptz_cam(cam)
+
+    if _is_onvif(cam):
+        # ONVIF: ContinuousMove; payload is already -1..1; screen y+ = down, ONVIF y+ = up
+        pan_n  =  payload.x if not cam.get("pan_invert",  False) else -payload.x
+        tilt_n = -payload.y if not cam.get("tilt_invert", False) else  payload.y
+        spd = cam.get("ptz_speed", 40) / 63.0  # normalize 1-63 to 0-1
+        await _onvif_continuous(pc, pan=pan_n * spd, tilt=tilt_n * spd)
+        return {"ok": True, "mode": "onvif_continuous"}
+
     sx = 1 if payload.x > 0 else -1
     sy = 1 if payload.y > 0 else -1
     if cam.get("pan_invert",  False): sx = -sx
@@ -338,7 +536,6 @@ async def ptz_joystick_start(cam_id: str, payload: JoystickPayload):
         op, magnitude = ("Down" if sy > 0 else "Up"), ay
 
     speed = max(1, round(cam.get("ptz_speed", 20) * magnitude))
-    pc = _ptz_cam(cam)
     await _nvr_call(pc, "PtzCtrl", [{"cmd": "PtzCtrl", "action": 0, "param": {
         "channel": pc.get("channel", 0), "op": op, "speed": speed, "timeout": 0,
     }}])
@@ -350,7 +547,11 @@ async def ptz_joystick_stop(cam_id: str):
     cam = cameras.get(cam_id)
     if not cam or not cam.get("ptz"):
         raise HTTPException(404, "Camera not found or not PTZ")
-    await _ptz_stop(_ptz_cam(cam))
+    pc = _ptz_cam(cam)
+    if _is_onvif(cam):
+        await _onvif_stop(pc)
+    else:
+        await _ptz_stop(pc)
     return {"ok": True}
 
 # ── Zoom control ───────────────────────────────────────────────────────────────
@@ -368,11 +569,18 @@ async def zoom(cam_id: str, payload: ZoomPayload):
     if not cam.get("ptz"):
         raise HTTPException(400, "Camera is not PTZ")
 
+    duration_s = cam.get("zoom_step_s", 0.3) * payload.steps
+    pc = _ptz_cam(cam)
+
+    if _is_onvif(cam):
+        zoom_v = 0.5 * payload.direction  # +0.5 = in, -0.5 = out
+        await _onvif_continuous(pc, zoom=zoom_v)
+        await asyncio.sleep(duration_s)
+        await _onvif_stop(pc)
+        return {"ok": True, "op": "onvif_zoom", "duration_s": round(duration_s, 2)}
+
     op = "ZoomInc" if payload.direction > 0 else "ZoomDec"
     zoom_speed = cam.get("zoom_speed", 40)
-    duration_s = cam.get("zoom_step_s", 0.3) * payload.steps
-
-    pc = _ptz_cam(cam)
     await _nvr_call(pc, "PtzCtrl", [{"cmd": "PtzCtrl", "action": 0, "param": {
         "channel": pc.get("channel", 0), "op": op, "speed": zoom_speed, "timeout": 0,
     }}])
@@ -393,42 +601,55 @@ async def get_presets(cam_id: str):
         raise HTTPException(404, "Camera not found or not PTZ")
     pc = _ptz_cam(cam)
     try:
-        data = await _nvr_call(pc, "GetPtzPreset", [{"cmd": "GetPtzPreset", "action": 0,
-            "param": {"channel": pc.get("channel", 0)}}], timeout=5)
-        raw = data[0]["value"]["PtzPreset"]
-        result = [
-            {"id": int(p["id"]), "name": p.get("name") or f"Preset {p['id']}"}
-            for p in raw
-            if p.get("enable", 1)
-        ]
+        if _is_onvif(cam):
+            result = await _onvif_get_presets(pc)
+        else:
+            data = await _nvr_call(pc, "GetPtzPreset", [{"cmd": "GetPtzPreset", "action": 0,
+                "param": {"channel": pc.get("channel", 0)}}], timeout=5)
+            raw = data[0]["value"]["PtzPreset"]
+            result = [
+                {"id": str(int(p["id"])), "name": p.get("name") or f"Preset {p['id']}"}
+                for p in raw
+                if p.get("enable", 1)
+            ]
         _preset_cache[cam_id] = result
         return result
     except Exception as e:
-        print(f"GetPtzPreset failed for {cam_id}: {e}")
+        print(f"GetPresets failed for {cam_id}: {e}")
         return []
 
 
 @app.post("/preset/{cam_id}/{preset_id}")
-async def goto_preset(cam_id: str, preset_id: int):
+async def goto_preset(cam_id: str, preset_id: str):
     cam = cameras.get(cam_id)
     if not cam or not cam.get("ptz"):
         raise HTTPException(404, "Camera not found or not PTZ")
     pc = _ptz_cam(cam)
 
+    if _is_onvif(cam):
+        try:
+            await _onvif_goto_preset(pc, preset_id)
+            print(f"Preset ONVIF {cam_id} token={preset_id!r}: ok")
+            return {"ok": True, "preset": preset_id}
+        except Exception as e:
+            print(f"Preset ONVIF {cam_id} token={preset_id!r}: {e}")
+            return {"ok": False, "error": str(e)}
+
+    pid = int(preset_id)
     if "ptz_ip" in cam:
         resp = await _nvr_call(pc, "GoPtzPreset", [{"cmd": "GoPtzPreset", "action": 0,
-            "param": {"channel": 0, "id": preset_id}}])
-        print(f"Preset {cam_id} #{preset_id} (direct): {resp}")
-        return {"ok": True, "preset": preset_id}
+            "param": {"channel": 0, "id": pid}}])
+        print(f"Preset {cam_id} #{pid} (direct): {resp}")
+        return {"ok": True, "preset": pid}
 
     channel = pc.get("channel", 0)
     speed = cam.get("ptz_speed", 40)
     resp = await _nvr_call(pc, "PtzCtrl", [{"cmd": "PtzCtrl", "action": 0, "param": {
-        "channel": channel, "op": "ToPos", "id": preset_id, "speed": speed,
+        "channel": channel, "op": "ToPos", "id": pid, "speed": speed,
     }}])
     code = resp[0].get("code", -99)
-    print(f"Preset {cam_id} #{preset_id} ToPos: code={code}")
-    return {"ok": code == 0, "preset": preset_id}
+    print(f"Preset {cam_id} #{pid} ToPos: code={code}")
+    return {"ok": code == 0, "preset": pid}
 
 # ── Camera list ────────────────────────────────────────────────────────────────
 
@@ -468,6 +689,48 @@ async def webrtc_offer(cam_id: str, request: Request):
             return Response(content=answer, status_code=resp.status, media_type="application/sdp")
 
 
+# ── RTSP connectivity test ─────────────────────────────────────────────────────
+
+@app.post("/api/cameras/test")
+async def api_test_camera(request: Request):
+    """TCP + RTSP handshake check — called before saving to avoid hammering bad endpoints."""
+    data = await request.json()
+    ip = data.get("ip", "").strip()
+    if not ip:
+        return {"ok": False, "error": "No IP address provided"}
+
+    try:
+        reader, writer = await asyncio.wait_for(
+            asyncio.open_connection(ip, 554), timeout=3.0
+        )
+    except asyncio.TimeoutError:
+        return {"ok": False, "error": f"Timed out — nothing responded on {ip}:554"}
+    except OSError as e:
+        return {"ok": False, "error": f"Cannot reach {ip}:554 — {e}"}
+
+    resp_str = ""
+    try:
+        writer.write(f"OPTIONS rtsp://{ip}:554/ RTSP/1.0\r\nCSeq: 1\r\n\r\n".encode())
+        await writer.drain()
+        raw = await asyncio.wait_for(reader.read(512), timeout=3.0)
+        resp_str = raw.decode("utf-8", errors="replace")
+    except asyncio.TimeoutError:
+        pass
+    finally:
+        try:
+            writer.close()
+            await writer.wait_closed()
+        except Exception:
+            pass
+
+    if not resp_str:
+        return {"ok": False, "error": f"Connected to {ip}:554 but got no response — may not be an RTSP server"}
+    if "RTSP/1.0" not in resp_str:
+        return {"ok": False, "error": f"Unexpected response from {ip}:554 — may not be an RTSP server"}
+
+    return {"ok": True, "message": f"RTSP server confirmed at {ip}:554"}
+
+
 # ── Camera management API ──────────────────────────────────────────────────────
 
 def _save_config():
@@ -504,7 +767,11 @@ def _reload_go2rtc():
         except subprocess.TimeoutExpired:
             _go2rtc_proc.kill()
 
-    _go2rtc_proc = subprocess.Popen([str(GO2RTC_BIN), "-config", str(cfg_file)])
+    _go2rtc_proc = subprocess.Popen(
+        [str(GO2RTC_BIN), "-config", str(cfg_file)],
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+    )
+    threading.Thread(target=_drain_go2rtc_output, args=(_go2rtc_proc,), daemon=True).start()
 
     for _ in range(20):
         try:
@@ -722,6 +989,42 @@ async def api_playback_stream(cam_id: str, filename: str, request: Request):
     except Exception as e:
         await session.close()
         raise HTTPException(502, f"Stream error: {e}")
+
+
+# ── go2rtc health & control ────────────────────────────────────────────────────
+
+@app.get("/api/go2rtc/health")
+async def api_go2rtc_health():
+    alive = _go2rtc_proc is not None and _go2rtc_proc.poll() is None
+    api_ok = False
+    stream_keys: list[str] = []
+    if alive:
+        try:
+            async with aiohttp.ClientSession() as s:
+                async with s.get(
+                    f"http://localhost:{GO2RTC_PORT}/api/streams",
+                    timeout=aiohttp.ClientTimeout(total=2),
+                ) as r:
+                    if r.status == 200:
+                        api_ok = True
+                        stream_keys = list((await r.json(content_type=None)).keys())
+        except Exception:
+            pass
+    recent = list(_go2rtc_log)
+    errors = [l for l in recent if any(w in l.lower() for w in ("error", "warn", "fail", "conn"))]
+    return {
+        "alive": alive,
+        "api_ok": api_ok,
+        "streams": stream_keys,
+        "recent_errors": errors[-15:],
+        "log_tail": recent[-15:],
+    }
+
+
+@app.post("/api/go2rtc/restart")
+async def api_go2rtc_restart():
+    await asyncio.get_event_loop().run_in_executor(None, _reload_go2rtc)
+    return {"ok": True}
 
 
 # ── ONVIF WS-Discovery ─────────────────────────────────────────────────────────

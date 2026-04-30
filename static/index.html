@@ -280,6 +280,40 @@
       z-index: 7;
       box-shadow: 0 2px 6px rgba(0,0,0,0.5);
     }
+
+    /* go2rtc status dot */
+    #rtc-status {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: #555;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: background 0.4s;
+      title: 'Stream engine';
+    }
+    #rtc-status.ok  { background: #22c55e; }
+    #rtc-status.err { background: #ef4444; box-shadow: 0 0 6px #ef4444; }
+
+    /* Per-card stream-offline overlay */
+    .stream-offline {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0,0,0,0.55);
+      z-index: 9;
+      gap: 10px;
+      pointer-events: none;
+    }
+    .stream-offline span { color: #fca5a5; font-size: 0.78rem; font-weight: 600; letter-spacing: 0.03em; }
+    .stream-offline button {
+      pointer-events: all;
+      background: #1e3a5f; border: 1px solid #2563eb; color: #93c5fd;
+      border-radius: 4px; padding: 4px 14px; font-size: 0.72rem; cursor: pointer;
+    }
+    .stream-offline button:hover { background: #2563eb; color: #fff; }
   </style>
 </head>
 <body>
@@ -297,6 +331,7 @@
     <span id="page-info"></span>
     <button id="next-btn" onclick="changePage(1)">&#8250;</button>
   </div>
+  <div id="rtc-status" title="Stream engine — click to reconnect" onclick="reconnectStreams()"></div>
   <a href="/settings.html" id="settings-btn" title="Camera setup">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
@@ -675,6 +710,7 @@ function buildCard(cam) {
   vs.dataset.camId = cam.id;
   wrap.appendChild(vs);
   vs.src = streamSrc(cam.id);
+  monitorCard(wrap, vs);
 
   const label = document.createElement('div');
   label.className = 'cam-label';
@@ -764,6 +800,78 @@ async function buildPresetBar(cam, wrap) {
   wrap.appendChild(bar);
 }
 
+// ── go2rtc health & stream monitoring ────────────────────────────────────────
+
+let _lastAutoRestart = 0;
+
+async function checkGo2rtcHealth() {
+  const dot = document.getElementById('rtc-status');
+  try {
+    const h = await fetch('/api/go2rtc/health').then(r => r.json());
+    if (h.alive && h.api_ok) {
+      dot.className = 'ok';
+      dot.title = `Stream engine running — ${h.streams.length} stream(s) registered`;
+    } else {
+      dot.className = 'err';
+      const reason = !h.alive ? 'process not running' : 'API not responding';
+      dot.title = `Stream engine offline (${reason}) — click to restart`;
+      // Auto-restart with 60s cooldown so a persistently bad camera can't cause a restart storm
+      const now = Date.now();
+      if (now - _lastAutoRestart > 60000) {
+        _lastAutoRestart = now;
+        console.warn('[go2rtc] dead/unresponsive — auto-restarting');
+        await fetch('/api/go2rtc/restart', { method: 'POST' }).catch(() => {});
+        await new Promise(r => setTimeout(r, 2500));
+        renderGrid();
+        await checkGo2rtcHealth();
+        return h;
+      }
+    }
+    if (h.recent_errors && h.recent_errors.length) {
+      console.warn('[go2rtc errors]', h.recent_errors.join('\n'));
+    }
+    if (h.log_tail && h.log_tail.length) {
+      console.debug('[go2rtc log]', h.log_tail.join('\n'));
+    }
+    return h;
+  } catch (e) {
+    dot.className = '';
+    dot.title = 'Stream engine status unknown';
+    return null;
+  }
+}
+
+async function reconnectStreams() {
+  const dot = document.getElementById('rtc-status');
+  dot.className = '';
+  dot.title = 'Restarting…';
+  try {
+    await fetch('/api/go2rtc/restart', { method: 'POST' });
+  } catch (e) { /* ignore */ }
+  // Give go2rtc 2s to come back up then re-render to reconnect video-rtc elements
+  await new Promise(r => setTimeout(r, 2500));
+  renderGrid();
+  await checkGo2rtcHealth();
+}
+
+function monitorCard(wrap, vs) {
+  // Check every 5s for the lifetime of the card — show/hide offline overlay as stream comes and goes
+  setInterval(() => {
+    if (!wrap.isConnected) return;
+    const video = vs.querySelector('video');
+    const hasVideo = video && video.videoWidth > 0;
+    const existing = wrap.querySelector('.stream-offline');
+    if (hasVideo) {
+      existing?.remove();
+    } else if (!existing) {
+      const div = document.createElement('div');
+      div.className = 'stream-offline';
+      div.innerHTML = '<span>⚠ Stream offline</span><button onclick="reconnectStreams()">Reconnect</button>';
+      wrap.appendChild(div);
+    }
+  }, 5000);
+}
+
 // ── Init ─────────────────────────────────────────────────────────────────────
 
 async function init() {
@@ -792,6 +900,8 @@ async function init() {
   });
 
   renderGrid();
+  await checkGo2rtcHealth();
+  setInterval(checkGo2rtcHealth, 15000);
 }
 
 init().catch(console.error);
