@@ -17,8 +17,6 @@ SolidCompression       = yes
 WizardStyle            = modern
 PrivilegesRequired     = lowest
 UninstallDisplayIcon   = {app}\{#AppExe}
-; Show "Installed for: current user only" in Add/Remove Programs
-InstallMode            = PerUserSilent
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
