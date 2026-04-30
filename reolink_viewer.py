@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Version: 3.1
+# Version: 3.2
 # Updated: 2026-04-30
 # v1.0 - 2026-04-28 - Initial stable release: go2rtc streaming, PTZ click-to-centre,
 #                     sequential pan+tilt, optical zoom, presets, serialized NVR API
@@ -28,6 +28,7 @@
 # v3.0 - 2026-04-30 - Exact Dahua click-to-centre via CGI PositionABS (mirrors SmartPSS);
 #                     reads current pan/tilt via getStatus then moves to computed absolute target
 # v3.1 - 2026-04-30 - Software position tracking for NVRs where getStatus returns 400;
+# v3.2 - 2026-04-30 - Suppress favicon 404; reset Dahua invert flags (wrong for PositionABS)
 #                     falls back to configured dahua_default_pan/tilt then timed ONVIF
 """
 Reolink camera viewer with click-to-pan PTZ control.
@@ -1280,6 +1281,11 @@ async def api_discover():
 
 
 # ── Static files ───────────────────────────────────────────────────────────────
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    return Response(status_code=204)
+
 
 app.mount("/", StaticFiles(directory=_STATIC_DIR, html=True), name="static")
 
