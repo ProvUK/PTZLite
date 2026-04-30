@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Version: 2.9
+# Version: 3.0
 # Updated: 2026-04-30
 # v1.0 - 2026-04-28 - Initial stable release: go2rtc streaming, PTZ click-to-centre,
 #                     sequential pan+tilt, optical zoom, presets, serialized NVR API
@@ -25,6 +25,8 @@
 #                     GetPresets/GotoPreset via SOAP; preset IDs unified as str across all brands
 # v2.8 - 2026-04-30 - Fix ONVIF click-to-centre: Dahua ignores RelativeMove; use timed ContinuousMove+Stop
 # v2.9 - 2026-04-30 - Improve ONVIF timed click accuracy: proportional speed + stop-lead latency compensation
+# v3.0 - 2026-04-30 - Exact Dahua click-to-centre via CGI PositionABS (mirrors SmartPSS);
+#                     reads current pan/tilt via getStatus then moves to computed absolute target
 """
 Reolink camera viewer with click-to-pan PTZ control.
 
@@ -54,6 +56,9 @@ import subprocess
 import sys
 import threading
 import time
+import ssl
+import urllib.error
+import urllib.parse
 import urllib.request
 import uuid
 import webbrowser
@@ -288,6 +293,87 @@ async def _ptz_stop(cam: dict):
     }}])
 
 # ── ONVIF PTZ (Dahua / Hikvision / generic ONVIF cameras) ─────────────────────
+# ── Dahua CGI API (HTTP Digest auth) ─────────────────────────────────────────
+#
+# SmartPSS Lite achieves exact click-to-centre via Dahua's proprietary CGI:
+#   GET /cgi-bin/ptz.cgi?action=getStatus&channel=N  → current pan/tilt/zoom
+#   GET /cgi-bin/ptz.cgi?action=start&channel=N&code=PositionABS&arg1=PAN&arg2=TILT&arg3=SPEED
+#
+# This gives exact positioning without depending on move-duration timing.
+# Falls back to timed ONVIF ContinuousMove if the NVR doesn't support it.
+
+_dahua_ssl_ctx = ssl.create_default_context()
+_dahua_ssl_ctx.check_hostname = False
+_dahua_ssl_ctx.verify_mode = ssl.CERT_NONE
+
+
+def _dahua_cgi_sync(cam: dict, params: dict) -> tuple[int, str]:
+    """Synchronous Dahua CGI call with HTTP Digest auth. Run in executor."""
+    port = cam.get("port", 80)
+    scheme = "https" if port == 443 or cam.get("https") else "http"
+    base_url = f"{scheme}://{cam['ip']}:{port}/cgi-bin/ptz.cgi"
+    full_url  = base_url + "?" + urllib.parse.urlencode(params)
+
+    mgr = urllib.request.HTTPPasswordMgrWithDefaultRealm()
+    mgr.add_password(None, base_url, cam["username"], cam["password"])
+    digest_handler = urllib.request.HTTPDigestAuthHandler(mgr)
+    https_handler  = urllib.request.HTTPSHandler(context=_dahua_ssl_ctx)
+    opener = urllib.request.build_opener(digest_handler, https_handler)
+    try:
+        with opener.open(full_url, timeout=5) as resp:
+            return resp.status, resp.read().decode("utf-8", errors="replace")
+    except urllib.error.HTTPError as e:
+        return e.code, ""
+    except Exception as e:
+        print(f"Dahua CGI error: {e}")
+        return 0, ""
+
+
+async def _dahua_cgi(cam: dict, params: dict) -> tuple[int, str]:
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, _dahua_cgi_sync, cam, params)
+
+
+async def _dahua_get_position(cam: dict) -> tuple[float, float] | None:
+    """Returns (pan_deg, tilt_deg) current camera position, or None on failure."""
+    channel = cam.get("channel", 1)
+    try:
+        status, text = await _dahua_cgi(cam, {"action": "getStatus", "channel": channel})
+        if status != 200:
+            print(f"Dahua getStatus HTTP {status}")
+            return None
+        pan = tilt = None
+        for line in text.splitlines():
+            key, _, val = line.strip().partition("=")
+            k = key.strip().lower()
+            if k.endswith(".pan") and pan is None:
+                try: pan = float(val.strip())
+                except ValueError: pass
+            elif k.endswith(".tilt") and tilt is None:
+                try: tilt = float(val.strip())
+                except ValueError: pass
+        if pan is not None and tilt is not None:
+            return pan, tilt
+        print(f"Dahua getStatus: could not parse pan/tilt from: {text!r}")
+    except Exception as e:
+        print(f"Dahua getStatus error: {e}")
+    return None
+
+
+async def _dahua_position_abs(cam: dict, pan: float, tilt: float, speed: int = 8) -> bool:
+    channel = cam.get("channel", 1)
+    status, _ = await _dahua_cgi(cam, {
+        "action": "start",
+        "channel": channel,
+        "code": "PositionABS",
+        "arg1": f"{pan:.2f}",
+        "arg2": f"{tilt:.2f}",
+        "arg3": speed,
+    })
+    print(f"Dahua PositionABS → HTTP {status}, target pan={pan:.2f}° tilt={tilt:.2f}°")
+    return status == 200
+
+
 #
 # Reolink uses a proprietary HTTP API; everything else uses ONVIF SOAP.
 # No extra dependencies — requests are built manually with aiohttp.
@@ -452,18 +538,35 @@ async def ptz_click(cam_id: str, click: ClickPayload):
     pc = _ptz_cam(cam)
 
     if _is_onvif(cam):
-        # Dahua NVRs reject GetStatus+AbsoluteMove — timed ContinuousMove is the only option.
-        # Accuracy improvements over naive approach:
-        #   1. Speed scales with click distance (slow near centre → less overshoot from stop latency)
-        #   2. Stop is sent early by ONVIF_STOP_LEAD_S to compensate for network + brake latency
-        ONVIF_STOP_LEAD_S = cam.get("onvif_stop_lead", 0.12)
-        max_spd = cam.get("ptz_speed", 40) / 63.0
-        dps     = cam.get("ptz_degrees_per_second", 20)
         if cam.get("pan_invert",  False): want_pan  = -want_pan
         if cam.get("tilt_invert", False): want_tilt = -want_tilt
 
+        # Dahua: use proprietary CGI PositionABS for exact click-to-centre.
+        # Mirrors what SmartPSS Lite does internally.
+        if cam.get("brand", "").lower() == "dahua":
+            pos = await _dahua_get_position(cam)
+            if pos is not None:
+                cur_pan, cur_tilt = pos
+                target_pan  = (cur_pan  + want_pan)  % 360.0
+                target_tilt = max(-90.0, min(90.0, cur_tilt + want_tilt))
+                print(f"PTZ Dahua CGI {cam['id']}: click=({click.x:.2f},{click.y:.2f}) "
+                      f"cur=({cur_pan:.1f}°,{cur_tilt:.1f}°) → target=({target_pan:.1f}°,{target_tilt:.1f}°)")
+                ok = await _dahua_position_abs(cam, target_pan, target_tilt)
+                if ok:
+                    return {"ok": True, "mode": "dahua_cgi_abs"}
+                print(f"PTZ Dahua PositionABS failed — falling back to timed ONVIF")
+            else:
+                print(f"PTZ Dahua getStatus failed — falling back to timed ONVIF")
+
+        # Timed ContinuousMove fallback (all ONVIF brands, or Dahua when CGI fails).
+        # Accuracy improvements over naive approach:
+        #   1. Speed scales with click distance (slow near centre → less overshoot)
+        #   2. Stop is sent early by ONVIF_STOP_LEAD_S to compensate for network/brake latency
+        ONVIF_STOP_LEAD_S = cam.get("onvif_stop_lead", 0.12)
+        max_spd = cam.get("ptz_speed", 40) / 63.0
+        dps     = cam.get("ptz_degrees_per_second", 20)
+
         async def _onvif_timed_axis(pan_v: float, tilt_v: float, degrees: float):
-            # Scale speed 20-100% of max proportional to click magnitude (min avoids stall)
             magnitude = min(1.0, degrees / (fov_h / 2))
             spd = max(0.2, min(1.0, magnitude)) * max_spd
             duration_s = max(0.05, degrees / dps - ONVIF_STOP_LEAD_S)
