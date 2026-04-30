@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Version: 3.0
+# Version: 3.1
 # Updated: 2026-04-30
 # v1.0 - 2026-04-28 - Initial stable release: go2rtc streaming, PTZ click-to-centre,
 #                     sequential pan+tilt, optical zoom, presets, serialized NVR API
@@ -27,6 +27,8 @@
 # v2.9 - 2026-04-30 - Improve ONVIF timed click accuracy: proportional speed + stop-lead latency compensation
 # v3.0 - 2026-04-30 - Exact Dahua click-to-centre via CGI PositionABS (mirrors SmartPSS);
 #                     reads current pan/tilt via getStatus then moves to computed absolute target
+# v3.1 - 2026-04-30 - Software position tracking for NVRs where getStatus returns 400;
+#                     falls back to configured dahua_default_pan/tilt then timed ONVIF
 """
 Reolink camera viewer with click-to-pan PTZ control.
 
@@ -301,6 +303,14 @@ async def _ptz_stop(cam: dict):
 #
 # This gives exact positioning without depending on move-duration timing.
 # Falls back to timed ONVIF ContinuousMove if the NVR doesn't support it.
+#
+# NVR position readback limitation: many Dahua NVRs (including DHI-NVR54xx series) return
+# HTTP 400 for getStatus on IP camera channels — the NVR doesn't aggregate camera position.
+# Workaround: software-track position after every successful PositionABS command.
+# Seed with dahua_default_pan / dahua_default_tilt in config.yaml if known.
+
+# cam_id → (pan_deg, tilt_deg) after last successful PositionABS; None = unknown
+_dahua_tracked_pos: dict[str, tuple[float, float]] = {}
 
 _dahua_ssl_ctx = ssl.create_default_context()
 _dahua_ssl_ctx.check_hostname = False
@@ -335,28 +345,53 @@ async def _dahua_cgi(cam: dict, params: dict) -> tuple[int, str]:
 
 
 async def _dahua_get_position(cam: dict) -> tuple[float, float] | None:
-    """Returns (pan_deg, tilt_deg) current camera position, or None on failure."""
+    """Returns (pan_deg, tilt_deg) current camera position, or None if unknown.
+
+    Priority:
+      1. CGI getStatus (live readback — works on some firmware)
+      2. Software-tracked position (set after each successful PositionABS)
+      3. dahua_default_pan / dahua_default_tilt from config (user-supplied seed)
+    """
+    cam_id  = cam["id"]
     channel = cam.get("channel", 1)
+
+    # 1. Try live CGI readback
     try:
         status, text = await _dahua_cgi(cam, {"action": "getStatus", "channel": channel})
-        if status != 200:
+        if status == 200:
+            pan = tilt = None
+            for line in text.splitlines():
+                key, _, val = line.strip().partition("=")
+                k = key.strip().lower()
+                if k.endswith(".pan") and pan is None:
+                    try: pan = float(val.strip())
+                    except ValueError: pass
+                elif k.endswith(".tilt") and tilt is None:
+                    try: tilt = float(val.strip())
+                    except ValueError: pass
+            if pan is not None and tilt is not None:
+                _dahua_tracked_pos[cam_id] = (pan, tilt)
+                return pan, tilt
+            print(f"Dahua getStatus: could not parse pan/tilt from: {text!r}")
+        else:
             print(f"Dahua getStatus HTTP {status}")
-            return None
-        pan = tilt = None
-        for line in text.splitlines():
-            key, _, val = line.strip().partition("=")
-            k = key.strip().lower()
-            if k.endswith(".pan") and pan is None:
-                try: pan = float(val.strip())
-                except ValueError: pass
-            elif k.endswith(".tilt") and tilt is None:
-                try: tilt = float(val.strip())
-                except ValueError: pass
-        if pan is not None and tilt is not None:
-            return pan, tilt
-        print(f"Dahua getStatus: could not parse pan/tilt from: {text!r}")
     except Exception as e:
         print(f"Dahua getStatus error: {e}")
+
+    # 2. Software-tracked position (updated after every successful PositionABS)
+    tracked = _dahua_tracked_pos.get(cam_id)
+    if tracked is not None:
+        print(f"Dahua {cam_id}: using tracked position ({tracked[0]:.1f}°, {tracked[1]:.1f}°)")
+        return tracked
+
+    # 3. User-configured default (seed position for first click after app start)
+    dp = cam.get("dahua_default_pan")
+    dt = cam.get("dahua_default_tilt")
+    if dp is not None and dt is not None:
+        pos = (float(dp), float(dt))
+        print(f"Dahua {cam_id}: using configured default position ({pos[0]:.1f}°, {pos[1]:.1f}°)")
+        return pos
+
     return None
 
 
@@ -371,6 +406,9 @@ async def _dahua_position_abs(cam: dict, pan: float, tilt: float, speed: int = 8
         "arg3": speed,
     })
     print(f"Dahua PositionABS → HTTP {status}, target pan={pan:.2f}° tilt={tilt:.2f}°")
+    if status == 200:
+        # Camera is now at this position — cache it for the next click
+        _dahua_tracked_pos[cam["id"]] = (pan, tilt)
     return status == 200
 
 
@@ -672,6 +710,10 @@ async def ptz_joystick_stop(cam_id: str):
     pc = _ptz_cam(cam)
     if _is_onvif(cam):
         await _onvif_stop(pc)
+        # Joystick leaves camera at an unknown position; invalidate so next click
+        # doesn't use stale tracking and get an incorrect absolute target
+        if cam.get("brand", "").lower() == "dahua":
+            _dahua_tracked_pos.pop(cam_id, None)
     else:
         await _ptz_stop(pc)
     return {"ok": True}
@@ -752,6 +794,10 @@ async def goto_preset(cam_id: str, preset_id: str):
         try:
             await _onvif_goto_preset(pc, preset_id)
             print(f"Preset ONVIF {cam_id} token={preset_id!r}: ok")
+            # Camera moved to an unknown absolute position; invalidate so next click
+            # doesn't use stale tracking and get an incorrect absolute target
+            if cam.get("brand", "").lower() == "dahua":
+                _dahua_tracked_pos.pop(cam_id, None)
             return {"ok": True, "preset": preset_id}
         except Exception as e:
             print(f"Preset ONVIF {cam_id} token={preset_id!r}: {e}")
