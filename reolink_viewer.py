@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Version: 4.4
+# Version: 4.5
 # Updated: 2026-04-30
 # v1.0 - 2026-04-28 - Initial stable release: go2rtc streaming, PTZ click-to-centre,
 #                     sequential pan+tilt, optical zoom, presets, serialized NVR API
@@ -51,6 +51,8 @@
 #                     fix JS fetch to check r.ok so discovery errors show as toast
 # v4.4 - 2026-04-30 - Discovery: send probe on every local interface so cameras are found
 #                     even when VPN/virtual adapters cause default route to wrong interface
+# v4.5 - 2026-04-30 - Enable/disable cameras: toggle on settings card; PATCH endpoint;
+#                     disabled cameras hidden from viewer and excluded from go2rtc streams
 """
 Reolink camera viewer with click-to-pan PTZ control.
 
@@ -182,9 +184,11 @@ def start_go2rtc():
         )
         sys.exit(1)
 
-    # Register both _main and _sub streams for every camera so the UI can toggle
+    # Register both _main and _sub streams for every enabled camera
     streams = {}
     for cam in _config["cameras"]:
+        if not cam.get("enabled", True):
+            continue
         streams[f"{cam['id']}_main"] = _rtsp_url(cam, "main")
         streams[f"{cam['id']}_sub"]  = _rtsp_url(cam, "sub")
 
@@ -873,6 +877,7 @@ def list_cameras():
             "go2rtc_port": GO2RTC_PORT,
         }
         for c in _config["cameras"]
+        if c.get("enabled", True)   # disabled cameras are hidden from the viewer
     ]
 
 # ── WebRTC signalling proxy ────────────────────────────────────────────────────
@@ -955,6 +960,8 @@ def _reload_go2rtc():
 
     streams = {}
     for cam in _config["cameras"]:
+        if not cam.get("enabled", True):
+            continue
         streams[f"{cam['id']}_main"] = _rtsp_url(cam, "main")
         streams[f"{cam['id']}_sub"]  = _rtsp_url(cam, "sub")
 
@@ -1010,7 +1017,7 @@ async def api_add_camera(request: Request):
         raise HTTPException(409, f"Camera '{cam_id}' already exists")
     _config["cameras"].append(data)
     _save_config()
-    await asyncio.get_event_loop().run_in_executor(None, _reload_go2rtc)
+    await asyncio.get_running_loop().run_in_executor(None, _reload_go2rtc)
     return data
 
 
@@ -1038,8 +1045,23 @@ async def api_update_camera(cam_id: str, request: Request):
     if old_key != new_key:
         _tokens.pop(old_key, None)
 
-    await asyncio.get_event_loop().run_in_executor(None, _reload_go2rtc)
+    await asyncio.get_running_loop().run_in_executor(None, _reload_go2rtc)
     return data
+
+
+@app.patch("/api/cameras/{cam_id}")
+async def api_patch_camera(cam_id: str, request: Request):
+    """Partial update — only the supplied fields are changed (e.g. {"enabled": false})."""
+    data = await request.json()
+    idx = next((i for i, c in enumerate(_config["cameras"]) if c["id"] == cam_id), None)
+    if idx is None:
+        raise HTTPException(404, f"Camera '{cam_id}' not found")
+    merged = {**_config["cameras"][idx], **data}
+    _config["cameras"][idx] = merged
+    _save_config()
+    # Reload go2rtc so enabled/disabled state is reflected in stream registration
+    await asyncio.get_running_loop().run_in_executor(None, _reload_go2rtc)
+    return merged
 
 
 @app.delete("/api/cameras/{cam_id}", status_code=204)
@@ -1050,7 +1072,7 @@ async def api_delete_camera(cam_id: str):
     _config["cameras"].pop(idx)
     _save_config()
     _preset_cache.pop(cam_id, None)
-    await asyncio.get_event_loop().run_in_executor(None, _reload_go2rtc)
+    await asyncio.get_running_loop().run_in_executor(None, _reload_go2rtc)
 
 
 # ── Playback ───────────────────────────────────────────────────────────────────
@@ -1235,7 +1257,7 @@ async def api_go2rtc_health():
 
 @app.post("/api/go2rtc/restart")
 async def api_go2rtc_restart():
-    await asyncio.get_event_loop().run_in_executor(None, _reload_go2rtc)
+    await asyncio.get_running_loop().run_in_executor(None, _reload_go2rtc)
     return {"ok": True}
 
 

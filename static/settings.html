@@ -54,12 +54,30 @@
       border-radius: 6px;
       padding: 14px 16px;
       cursor: pointer;
-      transition: border-color 0.15s;
+      transition: border-color 0.15s, opacity 0.15s;
+      display: flex; align-items: center; gap: 12px;
     }
     .cam-card:hover { border-color: #2563eb; }
+    .cam-card.disabled { opacity: 0.45; }
+    .cam-card-body { flex: 1; min-width: 0; }
     .cam-card-name { font-size: 0.9rem; font-weight: 600; margin-bottom: 4px; }
     .cam-card-meta { font-size: 0.72rem; color: #666; display: flex; flex-wrap: wrap; gap: 8px; }
     .cam-card-meta span { display: flex; align-items: center; gap: 3px; }
+
+    /* Toggle switch */
+    .cam-toggle { position: relative; flex-shrink: 0; width: 36px; height: 20px; }
+    .cam-toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
+    .cam-toggle-track {
+      position: absolute; inset: 0; border-radius: 20px;
+      background: #333; transition: background 0.2s; cursor: pointer;
+    }
+    .cam-toggle input:checked + .cam-toggle-track { background: #2563eb; }
+    .cam-toggle-track::after {
+      content: ''; position: absolute; top: 3px; left: 3px;
+      width: 14px; height: 14px; border-radius: 50%;
+      background: #fff; transition: transform 0.2s;
+    }
+    .cam-toggle input:checked + .cam-toggle-track::after { transform: translateX(16px); }
     .badge {
       display: inline-block; font-size: 0.6rem; font-weight: 700;
       letter-spacing: 0.06em; padding: 2px 6px; border-radius: 3px;
@@ -697,14 +715,36 @@ async function loadCameras() {
   grid.querySelectorAll('.cam-card').forEach(el => el.remove());
   const addBtn = document.getElementById('add-btn');
   cams.forEach(cam => {
+    const enabled = cam.enabled !== false;
     const card = document.createElement('div');
-    card.className = 'cam-card';
+    card.className = 'cam-card' + (enabled ? '' : ' disabled');
     const meta = [`${cam.ip}:${cam.port ?? 443}`, `ch ${cam.channel ?? 0}`, cam.stream ?? 'sub']
       .map(s => `<span>${s}</span>`).join('');
     const brandBadge = cam.brand === 'dahua' ? '<span class="badge" style="background:#f97316">Dahua</span>' : '';
     card.innerHTML = `
-      <div class="cam-card-name">${cam.name}${brandBadge}${cam.ptz ? '<span class="badge">PTZ</span>' : ''}</div>
-      <div class="cam-card-meta">${meta}</div>`;
+      <div class="cam-card-body">
+        <div class="cam-card-name">${cam.name}${brandBadge}${cam.ptz ? '<span class="badge">PTZ</span>' : ''}</div>
+        <div class="cam-card-meta">${meta}</div>
+      </div>
+      <label class="cam-toggle" title="${enabled ? 'Disable camera' : 'Enable camera'}">
+        <input type="checkbox" ${enabled ? 'checked' : ''}>
+        <span class="cam-toggle-track"></span>
+      </label>`;
+    // Toggle: flip enabled without opening the edit modal
+    const toggle = card.querySelector('input[type=checkbox]');
+    toggle.addEventListener('change', async e => {
+      e.stopPropagation();
+      const nowEnabled = toggle.checked;
+      card.classList.toggle('disabled', !nowEnabled);
+      toggle.closest('.cam-toggle').title = nowEnabled ? 'Disable camera' : 'Enable camera';
+      const r = await fetch(`/api/cameras/${cam.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ enabled: nowEnabled }),
+      });
+      if (!r.ok) { showToast('Failed to update camera', true); toggle.checked = !nowEnabled; }
+      else showToast(nowEnabled ? `${cam.name} enabled` : `${cam.name} disabled`);
+    });
     card.addEventListener('click', () => openEdit(cam));
     grid.insertBefore(card, addBtn);
   });
