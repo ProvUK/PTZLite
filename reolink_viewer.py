@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Version: 4.7
+# Version: 4.8
 # Updated: 2026-04-30
 # v1.0 - 2026-04-28 - Initial stable release: go2rtc streaming, PTZ click-to-centre,
 #                     sequential pan+tilt, optical zoom, presets, serialized NVR API
@@ -58,6 +58,8 @@
 #                     can't break go2rtc and kill existing streams
 # v4.7 - 2026-04-30 - Upgrade RTSP test to full DESCRIBE with Digest/Basic auth against
 #                     the actual stream URL; detects bad channel numbers, wrong passwords
+# v4.8 - 2026-04-30 - Fix RTSP test failing on working cameras: strip go2rtc #opts suffix
+#                     and inline credentials from URL before sending DESCRIBE to camera
 """
 Reolink camera viewer with click-to-pan PTZ control.
 
@@ -1025,6 +1027,19 @@ def _rtsp_describe_sync(url: str, user: str, password: str, timeout: float = 5.0
             pass
 
 
+def _clean_rtsp_url(cam: dict, stream: str) -> str:
+    """RTSP URL without embedded credentials and without go2rtc-specific options.
+    Used for the DESCRIBE test — real cameras don't understand the #opts syntax."""
+    ch    = cam.get("channel", 0)
+    brand = cam.get("brand", "reolink").lower()
+    ip    = cam.get("ip", "")
+    port  = cam.get("port", 554)
+    if brand == "dahua":
+        subtype = 0 if stream == "main" else 1
+        return f"rtsp://{ip}:{port}/cam/realmonitor?channel={ch}&subtype={subtype}"
+    return f"rtsp://{ip}:{port}/h264Preview_{ch + 1:02d}_{stream}"
+
+
 @app.post("/api/cameras/test")
 async def api_test_camera(request: Request):
     """
@@ -1036,8 +1051,6 @@ async def api_test_camera(request: Request):
     if not ip:
         return {"ok": False, "error": "No IP address provided"}
 
-    # If full camera details are provided, test the exact stream URL
-    # Otherwise fall back to a basic port check
     user     = data.get("username", "admin")
     password = data.get("password", "")
     brand    = data.get("brand", "reolink")
@@ -1045,10 +1058,10 @@ async def api_test_camera(request: Request):
     stream   = data.get("stream", "sub")
     port     = data.get("port", 554)
 
-    # Build a minimal cam dict to reuse _rtsp_url
     cam = {"ip": ip, "port": port, "username": user, "password": password,
            "brand": brand, "channel": channel, "stream": stream}
-    url = _rtsp_url(cam, stream)
+    # Use clean URL (no inline creds, no go2rtc options) — cameras won't parse those
+    url = _clean_rtsp_url(cam, stream)
 
     loop = asyncio.get_running_loop()
     result = await loop.run_in_executor(None, _rtsp_describe_sync, url, user, password)
