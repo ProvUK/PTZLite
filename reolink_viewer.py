@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Version: 4.1
+# Version: 4.2
 # Updated: 2026-04-30
 # v1.0 - 2026-04-28 - Initial stable release: go2rtc streaming, PTZ click-to-centre,
 #                     sequential pan+tilt, optical zoom, presets, serialized NVR API
@@ -45,6 +45,8 @@
 # v4.1 - 2026-04-30 - Fix frozen app server not starting: uvicorn signal-handler install
 #                     fails silently in non-main thread; use uvicorn.Server directly with
 #                     install_signal_handlers patched out; explicit asyncio loop per thread
+# v4.2 - 2026-04-30 - Fix UnicodeEncodeError in log file (open with utf-8); replace arrow
+#                     literals with ASCII in print(); guard input() in noconsole builds
 """
 Reolink camera viewer with click-to-pan PTZ control.
 
@@ -1424,10 +1426,11 @@ def main():
     # a log file first so import errors, uvicorn crashes, etc. are always captured.
     if getattr(sys, "frozen", False):
         log_path = _USER_DIR / "reolink_viewer.log"
-        _log_file = open(log_path, "w", buffering=1)  # line-buffered
+        # utf-8 + errors=replace so Unicode chars (arrows etc.) never crash the logger
+        _log_file = open(log_path, "w", buffering=1, encoding="utf-8", errors="replace")
         sys.stdout = _log_file
         sys.stderr = _log_file
-        print(f"Reolink Viewer starting — log: {log_path}")
+        print(f"Reolink Viewer starting - log: {log_path}")
 
     for i, arg in enumerate(sys.argv[1:]):
         if arg in ("--port", "-p") and i + 2 < len(sys.argv):
@@ -1435,7 +1438,7 @@ def main():
 
     try:
         start_go2rtc()
-        print(f"Reolink viewer → http://localhost:{port}")
+        print(f"Reolink viewer -> http://localhost:{port}")
         try:
             import pystray   # noqa: F401
             from PIL import Image  # noqa: F401
@@ -1451,7 +1454,8 @@ def main():
             f.write(f"\nERROR: {e}\n")
         # If we have a console show it there too; if not the log file is the fallback
         print(f"\nERROR: {e}\nDetails written to {log_path}")
-        input("\nPress Enter to close...")
+        if not getattr(sys, "frozen", False):
+            input("\nPress Enter to close...")
 
 
 if __name__ == "__main__":
@@ -1463,4 +1467,5 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\nERROR: {e}")
         import traceback; traceback.print_exc()
-        input("\nPress Enter to close...")
+        if not getattr(sys, "frozen", False):
+            input("\nPress Enter to close...")
