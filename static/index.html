@@ -771,7 +771,7 @@ function buildCard(cam) {
   });
   wrap.appendChild(fsBtn);
 
-  if (cam.playback) buildPlaybackBar(cam.id, wrap);
+  if (cam.playback && cam.brand !== 'dahua') buildPlaybackBar(cam.id, wrap);
 
   if (cam.ptz) {
     const badge = document.createElement('div');

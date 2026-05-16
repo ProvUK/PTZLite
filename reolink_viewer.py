@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Version: 5.0
+# Version: 5.1
 # Updated: 2026-04-30
 # v1.0 - 2026-04-28 - Initial stable release: go2rtc streaming, PTZ click-to-centre,
 #                     sequential pan+tilt, optical zoom, presets, serialized NVR API
@@ -61,6 +61,9 @@
 # v4.8 - 2026-04-30 - Fix RTSP test failing on working cameras: strip go2rtc #opts suffix
 #                     and inline credentials from URL before sending DESCRIBE to camera
 # v4.9 - 2026-04-30 - Fix RTSP test using cam port (API port 443) instead of RTSP port 554
+# v5.1 - 2026-04-30 - Playback: block Dahua (uses wrong API) with proper error; log real
+#                     stream 502 error from camera; pass brand to /cameras so frontend
+#                     can suppress playback bar for unsupported brands
 # v5.0 - 2026-04-30 - Playback overhaul: 30s/1m/5m/10m/30m buttons; Live always visible
 #                     and highlighted; errors persist until next action; backend falls back
 #                     to main stream if configured stream has no recordings
@@ -882,13 +885,14 @@ def list_cameras():
         {
             "id": c["id"],
             "name": c["name"],
+            "brand": c.get("brand", "reolink"),
             "ptz": bool(c.get("ptz", False)),
             "playback": bool(c.get("playback", False)),
             "monitor_preset": c.get("monitor_preset"),
             "go2rtc_port": GO2RTC_PORT,
         }
         for c in _config["cameras"]
-        if c.get("enabled", True)   # disabled cameras are hidden from the viewer
+        if c.get("enabled", True)    # disabled cameras are hidden from the viewer
     ]
 
 # ── WebRTC signalling proxy ────────────────────────────────────────────────────
@@ -1251,6 +1255,8 @@ async def api_playback_find(cam_id: str, payload: PlaybackPayload):
         raise HTTPException(404, "Camera not found")
     if not cam.get("playback"):
         raise HTTPException(400, "Playback not enabled for this camera")
+    if cam.get("brand", "reolink").lower() == "dahua":
+        raise HTTPException(400, "Playback is not supported for Dahua cameras")
 
     target_dt  = datetime.datetime.now() - datetime.timedelta(minutes=payload.minutes_ago)
     search_start = target_dt - datetime.timedelta(minutes=30)
@@ -1332,14 +1338,23 @@ async def api_playback_stream(cam_id: str, filename: str, request: Request):
     if rng := request.headers.get("range"):
         req_headers["Range"] = rng
 
+    print(f"Playback stream: {cam['ip']}:{port} file={filename}")
     session = aiohttp.ClientSession()
     try:
         resp = await session.get(
             dl_url, headers=req_headers, ssl=False,
             timeout=aiohttp.ClientTimeout(total=None, connect=10),
         )
+
+        # If the camera returns a non-video response, log and surface the error
+        if resp.status not in (200, 206):
+            body = await resp.text()
+            await session.close()
+            print(f"Playback stream error: HTTP {resp.status} from camera: {body[:300]}")
+            raise HTTPException(502, f"Camera returned HTTP {resp.status}: {body[:200]}")
+
         resp_headers = {"Accept-Ranges": "bytes"}
-        for h in ("Content-Length", "Content-Range"):
+        for h in ("Content-Length", "Content-Range", "Content-Type"):
             if h in resp.headers:
                 resp_headers[h] = resp.headers[h]
 
@@ -1355,10 +1370,13 @@ async def api_playback_stream(cam_id: str, filename: str, request: Request):
             _stream(),
             status_code=resp.status,
             headers=resp_headers,
-            media_type=resp.content_type or "video/mp4",
+            media_type=resp.headers.get("Content-Type", "video/mp4"),
         )
+    except HTTPException:
+        raise
     except Exception as e:
         await session.close()
+        print(f"Playback stream exception: {e}")
         raise HTTPException(502, f"Stream error: {e}")
 
 
