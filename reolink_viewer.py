@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Version: 4.5
+# Version: 4.6
 # Updated: 2026-04-30
 # v1.0 - 2026-04-28 - Initial stable release: go2rtc streaming, PTZ click-to-centre,
 #                     sequential pan+tilt, optical zoom, presets, serialized NVR API
@@ -53,6 +53,9 @@
 #                     even when VPN/virtual adapters cause default route to wrong interface
 # v4.5 - 2026-04-30 - Enable/disable cameras: toggle on settings card; PATCH endpoint;
 #                     disabled cameras hidden from viewer and excluded from go2rtc streams
+# v4.6 - 2026-04-30 - Fix toggle click opening edit modal (stop label click propagation);
+#                     auto-save as disabled when connection test fails so bad cameras
+#                     can't break go2rtc and kill existing streams
 """
 Reolink camera viewer with click-to-pan PTZ control.
 

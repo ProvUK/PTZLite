@@ -603,13 +603,16 @@ async function saveCamera() {
   saveBtn.disabled = false;
   saveBtn.textContent = 'Save';
 
+  let saveDisabled = false;
   if (testResult && !testResult.ok) {
     const proceed = confirm(
       'Connection test failed:\n' + testResult.error +
-      '\n\nSave anyway? The app will keep retrying until the camera responds.'
+      '\n\nSave as disabled? The camera will be saved but hidden from the viewer until you enable it in settings.'
     );
     if (!proceed) return;
+    saveDisabled = true;   // don't add to go2rtc until fixed
   }
+  if (saveDisabled) data.enabled = false;
 
   const url    = _editId ? `/api/cameras/${_editId}` : '/api/cameras';
   const method = _editId ? 'PUT' : 'POST';
@@ -624,7 +627,9 @@ async function saveCamera() {
 
   closeModal();
   await loadCameras();
-  showToast(_editId ? 'Camera updated' : 'Camera added');
+  showToast(saveDisabled
+    ? (_editId ? 'Camera saved (disabled — fix settings then enable)' : 'Camera added (disabled — fix settings then enable)')
+    : (_editId ? 'Camera updated' : 'Camera added'));
 }
 
 async function deleteCamera() {
@@ -731,6 +736,9 @@ async function loadCameras() {
         <span class="cam-toggle-track"></span>
       </label>`;
     // Toggle: flip enabled without opening the edit modal
+    // Stop clicks on the whole label (not just the input) from bubbling to the card
+    const toggleLabel = card.querySelector('.cam-toggle');
+    toggleLabel.addEventListener('click', e => e.stopPropagation());
     const toggle = card.querySelector('input[type=checkbox]');
     toggle.addEventListener('change', async e => {
       e.stopPropagation();
