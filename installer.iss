@@ -16,6 +16,8 @@ Compression            = lzma2
 SolidCompression       = yes
 WizardStyle            = modern
 PrivilegesRequired     = lowest
+; Allow elevation when available so the firewall rule [Run] step can succeed
+PrivilegesRequiredOverridesAllowed = commandline dialog
 UninstallDisplayIcon   = {app}\{#AppExe}
 
 [Languages]
@@ -42,6 +44,21 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; \
   Flags: uninsdeletevalue; Tasks: startup
 
 [Run]
+; Add Windows Firewall inbound rule covering Private+Domain+Public so UDP camera
+; discovery (WS-Discovery multicast) works without the user being prompted.
+; powershell is available on all Win10/11 machines and handles the rule correctly.
+; runascurrentuser means it runs in the installer's elevated context if UAC was accepted.
+Filename: "powershell.exe"; \
+  Parameters: "-NonInteractive -WindowStyle Hidden -Command ""Remove-NetFirewallRule -DisplayName '{#AppName}' -ErrorAction SilentlyContinue; New-NetFirewallRule -DisplayName '{#AppName}' -Direction Inbound -Action Allow -Program '{app}\{#AppExe}' -Profile Private,Domain,Public -Enabled True | Out-Null"""; \
+  Flags: runhidden waituntilterminated; \
+  StatusMsg: "Configuring firewall rule for camera discovery..."
+
 ; Offer to launch the app at the end of the installer wizard
 Filename: "{app}\{#AppExe}"; Description: "Launch {#AppName} now"; \
   Flags: nowait postinstall skipifsilent
+
+[UninstallRun]
+; Remove the firewall rule on uninstall
+Filename: "powershell.exe"; \
+  Parameters: "-NonInteractive -WindowStyle Hidden -Command ""Remove-NetFirewallRule -DisplayName '{#AppName}' -ErrorAction SilentlyContinue"""; \
+  Flags: runhidden waituntilterminated
