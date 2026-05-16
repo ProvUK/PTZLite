@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Version: 4.6
+# Version: 4.7
 # Updated: 2026-04-30
 # v1.0 - 2026-04-28 - Initial stable release: go2rtc streaming, PTZ click-to-centre,
 #                     sequential pan+tilt, optical zoom, presets, serialized NVR API
@@ -56,6 +56,8 @@
 # v4.6 - 2026-04-30 - Fix toggle click opening edit modal (stop label click propagation);
 #                     auto-save as disabled when connection test fails so bad cameras
 #                     can't break go2rtc and kill existing streams
+# v4.7 - 2026-04-30 - Upgrade RTSP test to full DESCRIBE with Digest/Basic auth against
+#                     the actual stream URL; detects bad channel numbers, wrong passwords
 """
 Reolink camera viewer with click-to-pan PTZ control.
 
@@ -907,44 +909,150 @@ async def webrtc_offer(cam_id: str, request: Request):
 
 # ── RTSP connectivity test ─────────────────────────────────────────────────────
 
+def _rtsp_describe_sync(url: str, user: str, password: str, timeout: float = 5.0) -> dict:
+    """
+    Send RTSP DESCRIBE to the exact stream URL with Digest/Basic auth.
+    Returns {"ok": True} or {"ok": False, "error": "..."}.
+    Uses raw sockets so we can handle the 401 → re-auth dance without ffmpeg.
+    """
+    import urllib.parse, base64, hashlib, re as _re
+
+    parsed = urllib.parse.urlparse(url)
+    host = parsed.hostname or ""
+    port = parsed.port or 554
+
+    def _send_recv(sock: socket.socket, msg: str) -> str:
+        sock.sendall(msg.encode())
+        buf = b""
+        sock.settimeout(timeout)
+        try:
+            while True:
+                chunk = sock.recv(4096)
+                if not chunk:
+                    break
+                buf += chunk
+                # RTSP responses end with \r\n\r\n (headers done)
+                if b"\r\n\r\n" in buf:
+                    break
+        except socket.timeout:
+            pass
+        return buf.decode("utf-8", errors="replace")
+
+    try:
+        sock = socket.create_connection((host, port), timeout=timeout)
+    except OSError as e:
+        return {"ok": False, "error": f"Cannot reach {host}:{port} — {e}"}
+
+    try:
+        # Step 1: unauthenticated DESCRIBE to get the WWW-Authenticate challenge
+        req1 = (
+            f"DESCRIBE {url} RTSP/1.0\r\n"
+            f"CSeq: 1\r\n"
+            f"User-Agent: ReoViewer/1.0\r\n"
+            f"Accept: application/sdp\r\n\r\n"
+        )
+        resp1 = _send_recv(sock, req1)
+
+        if not resp1:
+            return {"ok": False, "error": f"No response from {host}:{port}"}
+        if "RTSP/1.0" not in resp1:
+            return {"ok": False, "error": f"Not an RTSP server at {host}:{port}"}
+
+        status_line = resp1.split("\r\n")[0]
+        code = int(status_line.split()[1]) if len(status_line.split()) >= 2 else 0
+
+        # 200 with no auth required
+        if code == 200:
+            return {"ok": True, "message": f"Stream confirmed at {url}"}
+
+        # 404 / 4xx means the channel/URL doesn't exist
+        if code == 404:
+            return {"ok": False, "error": f"Stream URL not found (channel may not exist): {url}"}
+        if code not in (401, 403):
+            return {"ok": False, "error": f"RTSP server returned {code} for {url}"}
+
+        # Step 2: parse WWW-Authenticate and retry with credentials
+        auth_header = ""
+        for line in resp1.split("\r\n"):
+            if line.lower().startswith("www-authenticate:"):
+                auth_header = line[len("www-authenticate:"):].strip()
+                break
+
+        auth_str = ""
+        if auth_header.lower().startswith("digest"):
+            # Digest auth
+            realm_m  = _re.search(r'realm="([^"]*)"',  auth_header)
+            nonce_m  = _re.search(r'nonce="([^"]*)"',  auth_header)
+            realm = realm_m.group(1)  if realm_m  else ""
+            nonce = nonce_m.group(1)  if nonce_m  else ""
+            ha1 = hashlib.md5(f"{user}:{realm}:{password}".encode()).hexdigest()
+            ha2 = hashlib.md5(f"DESCRIBE:{url}".encode()).hexdigest()
+            resp_hash = hashlib.md5(f"{ha1}:{nonce}:{ha2}".encode()).hexdigest()
+            auth_str = (
+                f'Digest username="{user}", realm="{realm}", nonce="{nonce}", '
+                f'uri="{url}", response="{resp_hash}"'
+            )
+        else:
+            # Basic auth fallback
+            creds = base64.b64encode(f"{user}:{password}".encode()).decode()
+            auth_str = f"Basic {creds}"
+
+        req2 = (
+            f"DESCRIBE {url} RTSP/1.0\r\n"
+            f"CSeq: 2\r\n"
+            f"User-Agent: ReoViewer/1.0\r\n"
+            f"Accept: application/sdp\r\n"
+            f"Authorization: {auth_str}\r\n\r\n"
+        )
+        resp2 = _send_recv(sock, req2)
+        code2 = 0
+        if resp2:
+            sl = resp2.split("\r\n")[0]
+            code2 = int(sl.split()[1]) if len(sl.split()) >= 2 else 0
+
+        if code2 == 200:
+            return {"ok": True, "message": f"Stream confirmed at {url}"}
+        if code2 == 401:
+            return {"ok": False, "error": "Authentication failed — check username/password"}
+        if code2 == 404:
+            return {"ok": False, "error": f"Stream URL not found (channel may not exist): {url}"}
+        return {"ok": False, "error": f"RTSP server returned {code2} (expected 200)"}
+
+    finally:
+        try:
+            sock.close()
+        except Exception:
+            pass
+
+
 @app.post("/api/cameras/test")
 async def api_test_camera(request: Request):
-    """TCP + RTSP handshake check — called before saving to avoid hammering bad endpoints."""
+    """
+    Full RTSP DESCRIBE test against the actual stream URL with credentials.
+    Detects bad channels, wrong passwords, and unreachable hosts.
+    """
     data = await request.json()
     ip = data.get("ip", "").strip()
     if not ip:
         return {"ok": False, "error": "No IP address provided"}
 
-    try:
-        reader, writer = await asyncio.wait_for(
-            asyncio.open_connection(ip, 554), timeout=3.0
-        )
-    except asyncio.TimeoutError:
-        return {"ok": False, "error": f"Timed out — nothing responded on {ip}:554"}
-    except OSError as e:
-        return {"ok": False, "error": f"Cannot reach {ip}:554 — {e}"}
+    # If full camera details are provided, test the exact stream URL
+    # Otherwise fall back to a basic port check
+    user     = data.get("username", "admin")
+    password = data.get("password", "")
+    brand    = data.get("brand", "reolink")
+    channel  = data.get("channel", 0)
+    stream   = data.get("stream", "sub")
+    port     = data.get("port", 554)
 
-    resp_str = ""
-    try:
-        writer.write(f"OPTIONS rtsp://{ip}:554/ RTSP/1.0\r\nCSeq: 1\r\n\r\n".encode())
-        await writer.drain()
-        raw = await asyncio.wait_for(reader.read(512), timeout=3.0)
-        resp_str = raw.decode("utf-8", errors="replace")
-    except asyncio.TimeoutError:
-        pass
-    finally:
-        try:
-            writer.close()
-            await writer.wait_closed()
-        except Exception:
-            pass
+    # Build a minimal cam dict to reuse _rtsp_url
+    cam = {"ip": ip, "port": port, "username": user, "password": password,
+           "brand": brand, "channel": channel, "stream": stream}
+    url = _rtsp_url(cam, stream)
 
-    if not resp_str:
-        return {"ok": False, "error": f"Connected to {ip}:554 but got no response — may not be an RTSP server"}
-    if "RTSP/1.0" not in resp_str:
-        return {"ok": False, "error": f"Unexpected response from {ip}:554 — may not be an RTSP server"}
-
-    return {"ok": True, "message": f"RTSP server confirmed at {ip}:554"}
+    loop = asyncio.get_running_loop()
+    result = await loop.run_in_executor(None, _rtsp_describe_sync, url, user, password)
+    return result
 
 
 # ── Camera management API ──────────────────────────────────────────────────────

@@ -575,7 +575,15 @@ async function testCamera(silent = false) {
     const result = await fetch('/api/cameras/test', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ip }),
+      body: JSON.stringify({
+        ip,
+        username: v('f-username').value.trim(),
+        password: v('f-password').value,
+        brand:    v('f-brand').value,
+        channel:  parseInt(v('f-channel').value) || 0,
+        stream:   v('f-stream').value,
+        port:     parseInt(v('f-port').value) || 554,
+      }),
     }).then(r => r.json());
     if (!silent) {
       if (result.ok) showToast('✓ ' + result.message);
