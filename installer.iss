@@ -1,5 +1,5 @@
 #define AppName    "Reolink Viewer"
-#define AppVersion "4.9"
+#define AppVersion "5.0"
 #define AppExe     "Reolink Viewer.exe"
 
 [Setup]

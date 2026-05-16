@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Version: 4.9
+# Version: 5.0
 # Updated: 2026-04-30
 # v1.0 - 2026-04-28 - Initial stable release: go2rtc streaming, PTZ click-to-centre,
 #                     sequential pan+tilt, optical zoom, presets, serialized NVR API
@@ -61,6 +61,9 @@
 # v4.8 - 2026-04-30 - Fix RTSP test failing on working cameras: strip go2rtc #opts suffix
 #                     and inline credentials from URL before sending DESCRIBE to camera
 # v4.9 - 2026-04-30 - Fix RTSP test using cam port (API port 443) instead of RTSP port 554
+# v5.0 - 2026-04-30 - Playback overhaul: 30s/1m/5m/10m/30m buttons; Live always visible
+#                     and highlighted; errors persist until next action; backend falls back
+#                     to main stream if configured stream has no recordings
 """
 Reolink camera viewer with click-to-pan PTZ control.
 
@@ -1253,28 +1256,36 @@ async def api_playback_find(cam_id: str, payload: PlaybackPayload):
     search_start = target_dt - datetime.timedelta(minutes=30)
     search_end   = target_dt + datetime.timedelta(minutes=5)
 
-    try:
-        data = await _nvr_call(cam, "Search", [{"cmd": "Search", "action": 0, "param": {
-            "Search": {
-                "channel":    cam.get("channel", 0),
-                "onlyStatus": 0,
-                "streamType": cam.get("stream", "main"),
-                "StartTime":  _dt_to_reolink(search_start),
-                "EndTime":    _dt_to_reolink(search_end),
-            }
-        }}])
-    except Exception as e:
-        raise HTTPException(502, f"Recording search failed: {e}")
+    # Try the camera's configured stream type first, then fall back to "main"
+    # (recordings are usually only stored on the main stream, not sub)
+    stream_types = ["main"]
+    configured = cam.get("stream", "main")
+    if configured != "main":
+        stream_types = [configured, "main"]
 
-    try:
-        files = data[0]["value"]["SearchResult"]["File"]
-    except (KeyError, IndexError, TypeError):
-        return {"found": False, "reason": "no recordings in range"}
+    files = []
+    for stype in stream_types:
+        try:
+            data = await _nvr_call(cam, "Search", [{"cmd": "Search", "action": 0, "param": {
+                "Search": {
+                    "channel":    cam.get("channel", 0),
+                    "onlyStatus": 0,
+                    "streamType": stype,
+                    "StartTime":  _dt_to_reolink(search_start),
+                    "EndTime":    _dt_to_reolink(search_end),
+                }
+            }}])
+            files = data[0]["value"]["SearchResult"]["File"] or []
+            if files:
+                break   # found recordings on this stream type
+        except Exception as e:
+            raise HTTPException(502, f"Recording search failed: {e}")
 
     if not files:
-        return {"found": False, "reason": "no recordings in range"}
+        return {"found": False, "reason": "No recordings found in this time range"}
 
     target_epoch = target_dt.timestamp()
+    print(f"Playback: found {len(files)} file(s) for cam {cam_id}, seeking to {target_dt}")
 
     # Prefer a file whose window contains the target time
     best = next(
