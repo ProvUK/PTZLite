@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Version: 3.9
+# Version: 4.1
 # Updated: 2026-04-30
 # v1.0 - 2026-04-28 - Initial stable release: go2rtc streaming, PTZ click-to-centre,
 #                     sequential pan+tilt, optical zoom, presets, serialized NVR API
@@ -40,6 +40,11 @@
 #                     cache urllib digest-auth opener per NVR (reuses nonce + TCP connection)
 #                     configurable via dahua_click_zoom in config.yaml
 #                     falls back to configured dahua_default_pan/tilt then timed ONVIF
+# v4.0 - 2026-04-30 - Redirect all stdout/stderr to reolink_viewer.log at startup in frozen
+#                     app so daemon thread crashes and import errors are captured
+# v4.1 - 2026-04-30 - Fix frozen app server not starting: uvicorn signal-handler install
+#                     fails silently in non-main thread; use uvicorn.Server directly with
+#                     install_signal_handlers patched out; explicit asyncio loop per thread
 """
 Reolink camera viewer with click-to-pan PTZ control.
 
@@ -1347,18 +1352,32 @@ def _wait_for_server(port: int, timeout: float = 15.0) -> bool:
 
 
 def _run_uvicorn(port: int):
-    # Frozen apps on Windows need SelectorEventLoop — ProactorEventLoop (the 3.12+ default)
-    # breaks uvicorn's signal handling and causes silent startup failure
+    # uvicorn.run() tries to install OS signal handlers — only allowed from the main
+    # thread.  Running it in a daemon thread (as we do for the tray build) causes a
+    # silent ValueError and the server never binds.  Use uvicorn.Server directly and
+    # patch out install_signal_handlers to avoid this.
+    # Also force SelectorEventLoop: ProactorEventLoop (Python 3.12+ default on Windows)
+    # breaks asyncio inside frozen apps.
     if sys.platform == "win32":
         asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
+    print(f"[uvicorn] creating config on port {port}")
+    config = uvicorn.Config(app, host="0.0.0.0", port=port, log_level="info")
+    server = uvicorn.Server(config)
+    # Disable signal-handler installation — not permitted outside the main thread
+    server.install_signal_handlers = lambda: None  # type: ignore[method-assign]
+
+    print(f"[uvicorn] starting server loop")
     try:
-        uvicorn.run(app, host="0.0.0.0", port=port, log_level="warning")
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        loop.run_until_complete(server.serve())
     except Exception:
         import traceback
-        log_path = _USER_DIR / "startup_error.log"
-        with open(log_path, "w") as f:
-            traceback.print_exc(file=f)
+        traceback.print_exc()  # goes to reolink_viewer.log via redirected stderr
         raise
+    finally:
+        loop.close()
 
 
 def _main_tray(port: int):
@@ -1399,6 +1418,17 @@ def _main_tray(port: int):
 
 def main():
     port = 8765
+
+    # In a frozen (--noconsole) build there is no stdout/stderr at all — unhandled
+    # exceptions in daemon threads are silently swallowed.  Redirect everything to
+    # a log file first so import errors, uvicorn crashes, etc. are always captured.
+    if getattr(sys, "frozen", False):
+        log_path = _USER_DIR / "reolink_viewer.log"
+        _log_file = open(log_path, "w", buffering=1)  # line-buffered
+        sys.stdout = _log_file
+        sys.stderr = _log_file
+        print(f"Reolink Viewer starting — log: {log_path}")
+
     for i, arg in enumerate(sys.argv[1:]):
         if arg in ("--port", "-p") and i + 2 < len(sys.argv):
             port = int(sys.argv[i + 2])
