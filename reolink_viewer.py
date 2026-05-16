@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Version: 4.2
+# Version: 4.3
 # Updated: 2026-04-30
 # v1.0 - 2026-04-28 - Initial stable release: go2rtc streaming, PTZ click-to-centre,
 #                     sequential pan+tilt, optical zoom, presets, serialized NVR API
@@ -47,6 +47,8 @@
 #                     install_signal_handlers patched out; explicit asyncio loop per thread
 # v4.2 - 2026-04-30 - Fix UnicodeEncodeError in log file (open with utf-8); replace arrow
 #                     literals with ASCII in print(); guard input() in noconsole builds
+# v4.3 - 2026-04-30 - Discovery: use get_running_loop(); surface errors via HTTPException;
+#                     fix JS fetch to check r.ok so discovery errors show as toast
 """
 Reolink camera viewer with click-to-pan PTZ control.
 
@@ -1315,8 +1317,14 @@ def _ws_discover(timeout: float = 3.0) -> list[dict]:
 
 @app.get("/api/discover")
 async def api_discover():
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, _ws_discover)
+    loop = asyncio.get_running_loop()
+    try:
+        results = await loop.run_in_executor(None, _ws_discover)
+        return results
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Discovery failed: {e}")
 
 
 # ── Static files ───────────────────────────────────────────────────────────────
