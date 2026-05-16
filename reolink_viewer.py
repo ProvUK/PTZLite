@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Version: 4.3
+# Version: 4.4
 # Updated: 2026-04-30
 # v1.0 - 2026-04-28 - Initial stable release: go2rtc streaming, PTZ click-to-centre,
 #                     sequential pan+tilt, optical zoom, presets, serialized NVR API
@@ -49,6 +49,8 @@
 #                     literals with ASCII in print(); guard input() in noconsole builds
 # v4.3 - 2026-04-30 - Discovery: use get_running_loop(); surface errors via HTTPException;
 #                     fix JS fetch to check r.ok so discovery errors show as toast
+# v4.4 - 2026-04-30 - Discovery: send probe on every local interface so cameras are found
+#                     even when VPN/virtual adapters cause default route to wrong interface
 """
 Reolink camera viewer with click-to-pan PTZ control.
 
@@ -1287,31 +1289,80 @@ def _parse_wsd_response(data: bytes, sender_ip: str) -> dict | None:
     return {"ip": ip, "model": model}
 
 
-def _ws_discover(timeout: float = 3.0) -> list[dict]:
+def _local_ipv4_addrs() -> list[str]:
+    """Return all non-loopback IPv4 addresses on this machine (one per interface)."""
+    addrs: list[str] = []
+    try:
+        # getaddrinfo with the hostname gives one address per interface on most Windows configs
+        for _family, _type, _proto, _canon, sockaddr in socket.getaddrinfo(
+            socket.gethostname(), None, socket.AF_INET
+        ):
+            ip = sockaddr[0]
+            if not ip.startswith("127.") and ip not in addrs:
+                addrs.append(ip)
+    except Exception as e:
+        print(f"WSD: getaddrinfo failed: {e}")
+    # Always include the wildcard as fallback so we have at least one socket
+    if not addrs:
+        addrs = ["0.0.0.0"]
+    return addrs
+
+
+def _ws_discover(timeout: float = 4.0) -> list[dict]:
+    """Send WS-Discovery probe on every local interface and collect ProbeMatch replies."""
     probe = _WSD_PROBE_TMPL.format(uid=uuid.uuid4()).encode()
     results: list[dict] = []
     seen: set[str] = set()
 
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    try:
-        sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 4)
-        sock.settimeout(0.5)
-        sock.sendto(probe, _WSD_MCAST)
+    local_addrs = _local_ipv4_addrs()
+    print(f"WSD: probing via interfaces: {local_addrs}")
 
+    socks: list[socket.socket] = []
+    for addr in local_addrs:
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            s.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 4)
+            if addr != "0.0.0.0":
+                # Pin multicast to this specific interface
+                s.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF,
+                             socket.inet_aton(addr))
+            s.bind((addr, 0))
+            s.settimeout(0.3)
+            s.sendto(probe, _WSD_MCAST)
+            socks.append(s)
+            print(f"WSD: probe sent from {addr}")
+        except Exception as e:
+            print(f"WSD: skip {addr}: {e}")
+            try:
+                s.close()
+            except Exception:
+                pass
+
+    if not socks:
+        print("WSD: no sockets available")
+        return results
+
+    try:
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
-            try:
-                data, addr = sock.recvfrom(65535)
-            except socket.timeout:
-                continue
-            result = _parse_wsd_response(data, addr[0])
-            if result and result["ip"] not in seen:
-                seen.add(result["ip"])
-                results.append(result)
-                print(f"WSD: {result['ip']}  model={result['model']!r}")
+            for s in socks:
+                try:
+                    data, addr_tuple = s.recvfrom(65535)
+                    result = _parse_wsd_response(data, addr_tuple[0])
+                    if result and result["ip"] not in seen:
+                        seen.add(result["ip"])
+                        results.append(result)
+                        print(f"WSD found: {result['ip']}  model={result['model']!r}")
+                except socket.timeout:
+                    pass
+                except Exception as e:
+                    print(f"WSD recv error: {e}")
     finally:
-        sock.close()
+        for s in socks:
+            s.close()
 
+    print(f"WSD: done, found {len(results)} device(s)")
     return results
 
 
