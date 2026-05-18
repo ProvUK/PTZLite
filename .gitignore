@@ -8,3 +8,7 @@ config.yaml
 dist/
 build/
 *.spec
+*.exe
+test_vod.py
+reolink_viewer.py
+Reolink Viewer.spec

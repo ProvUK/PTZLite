@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-# Version: 5.1
-# Updated: 2026-04-30
+# Version: 5.26
+# Updated: 2026-05-18
 # v1.0 - 2026-04-28 - Initial stable release: go2rtc streaming, PTZ click-to-centre,
 #                     sequential pan+tilt, optical zoom, presets, serialized NVR API
 # v1.1 - 2026-04-28 - Add camera management API (GET/POST/PUT/DELETE /api/cameras)
@@ -40,7 +40,7 @@
 #                     cache urllib digest-auth opener per NVR (reuses nonce + TCP connection)
 #                     configurable via dahua_click_zoom in config.yaml
 #                     falls back to configured dahua_default_pan/tilt then timed ONVIF
-# v4.0 - 2026-04-30 - Redirect all stdout/stderr to reolink_viewer.log at startup in frozen
+# v4.0 - 2026-04-30 - Redirect all stdout/stderr to ptzlite.log at startup in frozen
 #                     app so daemon thread crashes and import errors are captured
 # v4.1 - 2026-04-30 - Fix frozen app server not starting: uvicorn signal-handler install
 #                     fails silently in non-main thread; use uvicorn.Server directly with
@@ -61,12 +61,82 @@
 # v4.8 - 2026-04-30 - Fix RTSP test failing on working cameras: strip go2rtc #opts suffix
 #                     and inline credentials from URL before sending DESCRIBE to camera
 # v4.9 - 2026-04-30 - Fix RTSP test using cam port (API port 443) instead of RTSP port 554
-# v5.1 - 2026-04-30 - Playback: block Dahua (uses wrong API) with proper error; log real
-#                     stream 502 error from camera; pass brand to /cameras so frontend
-#                     can suppress playback bar for unsupported brands
 # v5.0 - 2026-04-30 - Playback overhaul: 30s/1m/5m/10m/30m buttons; Live always visible
 #                     and highlighted; errors persist until next action; backend falls back
 #                     to main stream if configured stream has no recordings
+# v5.1 - 2026-04-30 - Playback: block Dahua (uses wrong API) with proper error; log real
+#                     stream 502 error from camera; pass brand to /cameras so frontend
+#                     can suppress playback bar for unsupported brands
+# v5.2 - 2026-05-16 - Fix Hub Pro playback: harden HTTP download (User-Agent, force_close,
+#                     channel+1 fallback); add RTSP go2rtc playback fallback via
+#                     POST /api/playback/{id}/rtsp_start and DELETE /api/playback/{id}/rtsp_stop;
+#                     frontend auto-falls back to RTSP when HTTP download returns 502
+# v5.4 - 2026-05-16 - Try POST+JSON body for cmd=Download (Hub Pro uses POST like every other
+#                     command, not GET); restructure candidates to support GET and POST methods
+# v5.5 - 2026-05-16 - Log full Search result file object (diagnose Hub Pro metadata);
+#                     add cmd=GetDownload POST candidates (newer Reolink/Hub Pro firmware);
+#                     fix frozen app go2rtc path (bin/ lives in _MEIPASS not next to .exe)
+# v5.6 - 2026-05-16 - Fix RTSP playback stream type: use recording file's actual type (sub/main)
+#                     from Search result instead of camera's configured live stream type;
+#                     Hub Pro records sub-stream over wireless so h264Preview_01_sub needed
+# v5.7 - 2026-05-16 - Try "name" as Download param key (Hub Pro Search returns field as "name",
+#                     not "filename"; "filename" key returns null); add GetDownload-name variants;
+#                     log stream type in RTSP registration line
+# v5.8 - 2026-05-17 - Rewrite playback stream using reolink_aio-confirmed Hub Pro API:
+# v5.9 - 2026-05-17 - Fix seek: pass seek_offset_s as &seek=N to FLV URL so Hub Pro
+#                     starts stream at the requested time offset within the recording file
+# v5.10 - 2026-05-17 - FLV timestamp seek: pass target wall-clock time as start= instead
+# v5.11 - 2026-05-17 - cmd=Download&source=&start=YYYYMMDDHHMMSS as primary (confirmed working)
+# v5.12 - 2026-05-17 - Fix target time: start param is already target_epoch, don't add seek again
+# v5.13 - 2026-05-17 - RTSP-first: try RTSP ?starttime= before HTTP download (RTSP is the only
+#                      mechanism that supports time-based seeking on Reolink Hub Pro);
+#                      pass target_epoch directly to rtsp_start so RTSP URL = exact target time
+#                      remove FLV-timestamp (poisons subsequent connections); FLV kept as
+#                      fallback; restore video.currentTime for video/mp4 Range seeking
+#                      of filename+seek; Hub Pro resolves the exact position natively;
+#                      return target_epoch from search; filename FLV kept as fallback
+#                     (1) FLV /flv?app=bcs&stream=playback.bcs with user/password auth;
+#                     (2) NvrDownload (POST) -> Download (GET source=) two-step NVR flow;
+# v5.14 - 2026-05-17 - Revert RTSP-first (Hub Pro registers stream but sends no video);
+#                      restore HTTP-download-first with video.currentTime = seekS seeking;
+# v5.15 - 2026-05-18 - Fix Range seeking: Hub Pro ignores Range headers and always returns
+#                      HTTP 200; intercept browser Range requests and implement byte-skipping
+#                      in the proxy so we return proper HTTP 206 — enables video.currentTime
+# v5.16 - 2026-05-18 - Fix Range probe: Chrome sends Range: bytes=0- first to test Range
+#                      support; v5.15 had range_start>0 check so 0- got 200 back, Chrome
+#                      gave up on Range entirely; now ANY Range header returns 206
+# v5.17 - 2026-05-18 - Log raw Search API response on failure to diagnose Hub Pro errors
+# v5.18 - 2026-05-18 - Pass file_size from Search result to stream endpoint; use it as
+#                      Content-Length fallback when Hub Pro omits it on Download response,
+#                      ensuring 206 Content-Range header is always populated for seeking
+#                     (3) standard GET fallbacks; pass stream_type from search to stream URL
+# v5.19 - 2026-05-18 - Replace byte-skip with temp-file tee cache (superseded by v5.20)
+# v5.20 - 2026-05-18 - Fix black-screen buffering: Hub Pro MP4s have moov atom at end of file;
+#                      download full recording to temp file before serving; use FileResponse
+#                      so Chrome can instantly Range-seek to moov and play position from disk
+# v5.21 - 2026-05-18 - Fix silent wait: background prefetch with progress polling; frontend
+#                      shows "45%..." in button while downloading, then loads video from cache
+# v5.22 - 2026-05-18 - Replace full-file download with FLV streaming: proxy Hub Pro FLV
+#                      endpoint with seek=N seconds; flv.js plays via MSE instantly with no
+#                      pre-download; falls back to RTSP go2rtc on FLV error
+# v5.23 - 2026-05-18 - Fix FLV 502: Hub Pro serves FLV over HTTP:80, not HTTPS:443;
+#                      try configured port first then fallback to http:80; log full Hub Pro
+#                      rejection response to diagnose remaining failures
+# v5.24 - 2026-05-18 - Try RTMP rtmp://ip:1935/bcs/playback.bcs with filename+seek before
+#                      RTSP ?starttime= in rtsp_start; Hub Pro exposes native RTMP on 1935;
+#                      pass filename+seekS from frontend so RTMP URL has correct recording ref
+# v5.26 - 2026-05-18 - Remove all recording playback code (Hub Pro API incompatible);
+#                      live streaming, PTZ, camera management, settings unchanged
+# v5.25 - 2026-05-18 - Progressive stream: Hub Pro MP4s have moov at byte 36 (faststart);
+#                      /stream now starts a background download and immediately returns a
+#                      streaming response from byte 0 so the browser can play within seconds;
+#                      Range requests on the in-progress temp file are served as bytes arrive,
+#                      enabling the browser to auto-seek to the target time once downloaded;
+#                      JS auto-seeks when estimated target byte is available
+# v5.3 - 2026-05-16 - Expand search window from 30min to 2h (fixes 1-hour recording blocks);
+#                     return end_epoch from search; try time-based Download URL as extra
+#                     candidate (&starttime=&endtime= instead of &filename=, Hub Pro variant);
+#                     add GET /api/log endpoint; add View Log link in settings
 """
 Reolink camera viewer with click-to-pan PTZ control.
 
@@ -109,12 +179,11 @@ import aiohttp
 import uvicorn
 import yaml
 from fastapi import FastAPI, HTTPException, Request, Response
-from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 # When frozen by PyInstaller: user files (config, go2rtc) live next to the .exe;
-# bundled resources (static/) are extracted to sys._MEIPASS at runtime.
+# bundled resources (static/, bin/) are extracted to sys._MEIPASS (_internal/) at runtime.
 if getattr(sys, 'frozen', False):
     _USER_DIR   = Path(sys.executable).parent
     _BUNDLE_DIR = Path(sys._MEIPASS)        # type: ignore[attr-defined]
@@ -124,11 +193,12 @@ else:
 
 BASE        = _USER_DIR
 CONFIG_PATH = BASE / "config.yaml"
-GO2RTC_BIN  = BASE / "bin" / "go2rtc.exe"
+# go2rtc.exe is a bundled read-only binary — use _BUNDLE_DIR (sys._MEIPASS) when frozen
+GO2RTC_BIN  = _BUNDLE_DIR / "bin" / "go2rtc.exe"
 GO2RTC_PORT = 1984
 _STATIC_DIR = _BUNDLE_DIR / "static"
 
-app = FastAPI(title="Reolink Viewer")
+app = FastAPI(title="PTZLite")
 
 # ── Config ─────────────────────────────────────────────────────────────────────
 
@@ -887,7 +957,6 @@ def list_cameras():
             "name": c["name"],
             "brand": c.get("brand", "reolink"),
             "ptz": bool(c.get("ptz", False)),
-            "playback": bool(c.get("playback", False)),
             "monitor_preset": c.get("monitor_preset"),
             "go2rtc_port": GO2RTC_PORT,
         }
@@ -1208,178 +1277,6 @@ async def api_delete_camera(cam_id: str):
     await asyncio.get_running_loop().run_in_executor(None, _reload_go2rtc)
 
 
-# ── Playback ───────────────────────────────────────────────────────────────────
-
-def _dt_to_reolink(dt: datetime.datetime) -> dict:
-    return {"year": dt.year, "mon": dt.month, "day": dt.day,
-            "hour": dt.hour, "min": dt.minute, "sec": dt.second}
-
-
-def _reolink_to_epoch(d: dict) -> float:
-    return datetime.datetime(
-        d["year"], d["mon"], d["day"],
-        d["hour"], d.get("min", 0), d.get("sec", 0)
-    ).timestamp()
-
-
-async def _ensure_token(cam: dict) -> str:
-    """Return a valid cached token, logging in if needed."""
-    key = _nvr_key(cam)
-    lock = _get_nvr_lock(cam)
-    async with lock:
-        token, expires = _tokens.get(key, ("", 0.0))
-        if not token or time.time() >= expires - 60:
-            port = cam.get("port", 80)
-            scheme = "https" if port == 443 or cam.get("https") else "http"
-            data = await _post(
-                f"{scheme}://{cam['ip']}:{port}/api.cgi?cmd=Login",
-                [{"cmd": "Login", "action": 0, "param": {
-                    "User": {"userName": cam["username"], "password": cam["password"]}
-                }}]
-            )
-            token = data[0]["value"]["Token"]["name"]
-            lease = data[0]["value"]["Token"]["leaseTime"]
-            _tokens[key] = (token, time.time() + lease)
-        return token
-
-
-class PlaybackPayload(BaseModel):
-    minutes_ago: float = 5.0
-
-
-@app.post("/api/playback/{cam_id}")
-async def api_playback_find(cam_id: str, payload: PlaybackPayload):
-    """Search for the recording that covers (now - minutes_ago) and return seek info."""
-    cam = cameras.get(cam_id)
-    if not cam:
-        raise HTTPException(404, "Camera not found")
-    if not cam.get("playback"):
-        raise HTTPException(400, "Playback not enabled for this camera")
-    if cam.get("brand", "reolink").lower() == "dahua":
-        raise HTTPException(400, "Playback is not supported for Dahua cameras")
-
-    target_dt  = datetime.datetime.now() - datetime.timedelta(minutes=payload.minutes_ago)
-    search_start = target_dt - datetime.timedelta(minutes=30)
-    search_end   = target_dt + datetime.timedelta(minutes=5)
-
-    # Try the camera's configured stream type first, then fall back to "main"
-    # (recordings are usually only stored on the main stream, not sub)
-    stream_types = ["main"]
-    configured = cam.get("stream", "main")
-    if configured != "main":
-        stream_types = [configured, "main"]
-
-    files = []
-    for stype in stream_types:
-        try:
-            data = await _nvr_call(cam, "Search", [{"cmd": "Search", "action": 0, "param": {
-                "Search": {
-                    "channel":    cam.get("channel", 0),
-                    "onlyStatus": 0,
-                    "streamType": stype,
-                    "StartTime":  _dt_to_reolink(search_start),
-                    "EndTime":    _dt_to_reolink(search_end),
-                }
-            }}])
-            files = data[0]["value"]["SearchResult"]["File"] or []
-            if files:
-                break   # found recordings on this stream type
-        except Exception as e:
-            raise HTTPException(502, f"Recording search failed: {e}")
-
-    if not files:
-        return {"found": False, "reason": "No recordings found in this time range"}
-
-    target_epoch = target_dt.timestamp()
-    print(f"Playback: found {len(files)} file(s) for cam {cam_id}, seeking to {target_dt}")
-
-    # Prefer a file whose window contains the target time
-    best = next(
-        (f for f in files
-         if _reolink_to_epoch(f["StartTime"]) <= target_epoch <= _reolink_to_epoch(f["EndTime"])),
-        None
-    )
-    # Fall back to the most recent file ending before the target
-    if best is None:
-        before = [f for f in files if _reolink_to_epoch(f["EndTime"]) <= target_epoch]
-        best = max(before, key=lambda f: _reolink_to_epoch(f["EndTime"])) if before else None
-
-    if best is None:
-        return {"found": False, "reason": "no suitable recording found"}
-
-    start_epoch = _reolink_to_epoch(best["StartTime"])
-    seek_s = max(0.0, target_epoch - start_epoch)
-
-    return {
-        "found":       True,
-        "filename":    best["name"],
-        "seek_offset_s": round(seek_s),
-        "start_epoch": start_epoch,
-    }
-
-
-@app.get("/api/playback/{cam_id}/stream")
-async def api_playback_stream(cam_id: str, filename: str, request: Request):
-    """Proxy the recording file from the hub/NVR, supporting Range requests for seeking."""
-    cam = cameras.get(cam_id)
-    if not cam:
-        raise HTTPException(404, "Camera not found")
-
-    token = await _ensure_token(cam)
-    port   = cam.get("port", 80)
-    scheme = "https" if port == 443 or cam.get("https") else "http"
-    dl_url = (
-        f"{scheme}://{cam['ip']}:{port}/api.cgi"
-        f"?cmd=Download&token={token}"
-        f"&channel={cam.get('channel', 0)}&filename={filename}"
-    )
-
-    req_headers: dict[str, str] = {}
-    if rng := request.headers.get("range"):
-        req_headers["Range"] = rng
-
-    print(f"Playback stream: {cam['ip']}:{port} file={filename}")
-    session = aiohttp.ClientSession()
-    try:
-        resp = await session.get(
-            dl_url, headers=req_headers, ssl=False,
-            timeout=aiohttp.ClientTimeout(total=None, connect=10),
-        )
-
-        # If the camera returns a non-video response, log and surface the error
-        if resp.status not in (200, 206):
-            body = await resp.text()
-            await session.close()
-            print(f"Playback stream error: HTTP {resp.status} from camera: {body[:300]}")
-            raise HTTPException(502, f"Camera returned HTTP {resp.status}: {body[:200]}")
-
-        resp_headers = {"Accept-Ranges": "bytes"}
-        for h in ("Content-Length", "Content-Range", "Content-Type"):
-            if h in resp.headers:
-                resp_headers[h] = resp.headers[h]
-
-        async def _stream():
-            try:
-                async for chunk in resp.content.iter_chunked(65536):
-                    yield chunk
-            finally:
-                resp.release()
-                await session.close()
-
-        return StreamingResponse(
-            _stream(),
-            status_code=resp.status,
-            headers=resp_headers,
-            media_type=resp.headers.get("Content-Type", "video/mp4"),
-        )
-    except HTTPException:
-        raise
-    except Exception as e:
-        await session.close()
-        print(f"Playback stream exception: {e}")
-        raise HTTPException(502, f"Stream error: {e}")
-
-
 # ── go2rtc health & control ────────────────────────────────────────────────────
 
 @app.get("/api/go2rtc/health")
@@ -1555,6 +1452,22 @@ async def api_discover():
         raise HTTPException(status_code=500, detail=f"Discovery failed: {e}")
 
 
+# ── Log viewer ────────────────────────────────────────────────────────────────
+
+@app.get("/api/log")
+async def api_get_log(lines: int = 500):
+    """Return the last N lines of ptzlite.log as plain text."""
+    log_path = _USER_DIR / "ptzlite.log"
+    if not log_path.exists():
+        return Response(content="Log file not found.\n", media_type="text/plain; charset=utf-8")
+    try:
+        text = log_path.read_text(encoding="utf-8", errors="replace")
+        tail = "\n".join(text.splitlines()[-lines:])
+        return Response(content=tail + "\n", media_type="text/plain; charset=utf-8")
+    except Exception as e:
+        return Response(content=f"Error reading log: {e}\n", media_type="text/plain; charset=utf-8")
+
+
 # ── Static files ───────────────────────────────────────────────────────────────
 
 @app.get("/favicon.ico", include_in_schema=False)
@@ -1612,7 +1525,7 @@ def _run_uvicorn(port: int):
         loop.run_until_complete(server.serve())
     except Exception:
         import traceback
-        traceback.print_exc()  # goes to reolink_viewer.log via redirected stderr
+        traceback.print_exc()  # goes to ptzlite.log via redirected stderr
         raise
     finally:
         loop.close()
@@ -1639,9 +1552,9 @@ def _main_tray(port: int):
         icon.stop()
 
     tray = pystray.Icon(
-        "Reolink Viewer",
+        "PTZLite",
         icon_img,
-        "Reolink Viewer",
+        "PTZLite",
         menu=pystray.Menu(
             pystray.MenuItem("Open Viewer",  on_open,     default=True),
             pystray.MenuItem("Settings",     on_settings),
@@ -1661,12 +1574,12 @@ def main():
     # exceptions in daemon threads are silently swallowed.  Redirect everything to
     # a log file first so import errors, uvicorn crashes, etc. are always captured.
     if getattr(sys, "frozen", False):
-        log_path = _USER_DIR / "reolink_viewer.log"
+        log_path = _USER_DIR / "ptzlite.log"
         # utf-8 + errors=replace so Unicode chars (arrows etc.) never crash the logger
         _log_file = open(log_path, "w", buffering=1, encoding="utf-8", errors="replace")
         sys.stdout = _log_file
         sys.stderr = _log_file
-        print(f"Reolink Viewer starting - log: {log_path}")
+        print(f"PTZLite starting - log: {log_path}")
 
     for i, arg in enumerate(sys.argv[1:]):
         if arg in ("--port", "-p") and i + 2 < len(sys.argv):

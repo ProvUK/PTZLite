@@ -1,6 +1,6 @@
-#define AppName    "Reolink Viewer"
-#define AppVersion "5.1"
-#define AppExe     "Reolink Viewer.exe"
+#define AppName    "PTZLite"
+#define AppVersion "5.26"
+#define AppExe     "PTZLite.exe"
 
 [Setup]
 AppName                = {#AppName}
@@ -11,7 +11,7 @@ DefaultDirName         = {localappdata}\Programs\{#AppName}
 DefaultGroupName       = {#AppName}
 DisableProgramGroupPage= yes
 OutputDir              = .
-OutputBaseFilename     = Reolink Viewer Setup
+OutputBaseFilename     = PTZLite Setup
 Compression            = lzma2
 SolidCompression       = yes
 WizardStyle            = modern
@@ -29,7 +29,7 @@ Name: "startup";     Description: "Start automatically &with Windows";      Grou
 
 [Files]
 ; Entire PyInstaller output folder — recurse so all DLLs and the static/ tree are included
-Source: "dist\Reolink Viewer\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "dist\PTZLite\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 ; Ship config.example.yaml as config.yaml on first install only — never overwrite existing config
 Source: "config.example.yaml"; DestDir: "{app}"; DestName: "config.yaml"; Flags: onlyifdoesntexist uninsneveruninstall
 

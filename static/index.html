@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Reolink Viewer</title>
+  <title>PTZLite</title>
   <script type="module">
     import { VideoRTC } from '/video-rtc.js';
     customElements.define('video-rtc', VideoRTC);
@@ -222,48 +222,6 @@
       100% { background: rgba(0,0,0,.65); border-color: rgba(255,255,255,.15); color: #ddd; }
     }
 
-    /* Playback controls */
-    .pb-bar {
-      position: absolute;
-      bottom: 7px; left: 50%; transform: translateX(-50%);
-      display: flex; gap: 4px; align-items: center;
-      z-index: 11;
-      pointer-events: none;
-    }
-    .pb-btn {
-      background: rgba(0,0,0,.7);
-      backdrop-filter: blur(4px);
-      color: #ccc;
-      font-size: 0.62rem; font-weight: 600; letter-spacing: 0.04em;
-      padding: 3px 8px;
-      border: 1px solid rgba(255,255,255,.15);
-      border-radius: 4px;
-      cursor: pointer;
-      pointer-events: all;
-      white-space: nowrap;
-      transition: background 0.15s, color 0.15s, border-color 0.15s;
-    }
-    .pb-btn:hover:not(:disabled) { background: rgba(37,99,235,.85); color: #fff; border-color: #2563eb; }
-    .pb-btn:disabled { opacity: 0.4; cursor: default; }
-    .pb-btn.active { background: rgba(37,99,235,.9); color: #fff; border-color: #2563eb; }
-    .pb-live { border-color: rgba(34,197,94,.4); color: #86efac; }
-    .pb-live.active { background: rgba(34,197,94,.25); color: #4ade80; border-color: rgba(34,197,94,.7); }
-    .pb-live:hover:not(:disabled) { background: rgba(34,197,94,.35); color: #fff; border-color: #22c55e; }
-    .pb-sep { width: 1px; height: 14px; background: rgba(255,255,255,.15); pointer-events: none; }
-    .pb-err {
-      background: rgba(120,53,15,.8); border-color: rgba(234,179,8,.5);
-      color: #fde047; display: none; cursor: default;
-      max-width: 180px; overflow: hidden; text-overflow: ellipsis;
-    }
-
-    /* Native video overlay shown during playback */
-    .pb-video {
-      position: absolute; inset: 0;
-      width: 100%; height: 100%;
-      background: #000;
-      z-index: 10;
-    }
-
     .joystick-ring {
       position: absolute;
       width: 120px; height: 120px;
@@ -323,7 +281,7 @@
 <body>
 
 <header>
-  <h1>Reolink Viewer</h1>
+  <h1>PTZLite</h1>
   <span id="cam-count"></span>
   <div id="stream-btns">
     <button data-stream="main" class="active">Main</button>
@@ -617,126 +575,6 @@ function handleScroll(e, overlay, vsEl, camId) {
   else applyDigitalZoom(e, overlay, vsEl, camId);
 }
 
-// ── Playback ──────────────────────────────────────────────────────────────────
-
-const PB_OPTIONS = [
-  { label: '30s', minutes: 0.5 },
-  { label: '1m',  minutes: 1   },
-  { label: '5m',  minutes: 5   },
-  { label: '10m', minutes: 10  },
-  { label: '30m', minutes: 30  },
-];
-
-function buildPlaybackBar(camId, wrap) {
-  const bar = document.createElement('div');
-  bar.className = 'pb-bar';
-
-  // Live button — always visible, highlighted when in live mode
-  const liveBtn = document.createElement('button');
-  liveBtn.className = 'pb-btn pb-live active';
-  liveBtn.textContent = '● Live';
-  liveBtn.title = 'Return to live view';
-  liveBtn.addEventListener('click', e => { e.stopPropagation(); goLive(camId, wrap); });
-  bar.appendChild(liveBtn);
-
-  // Separator
-  const sep = document.createElement('div');
-  sep.className = 'pb-sep';
-  bar.appendChild(sep);
-
-  // Rewind buttons
-  for (const opt of PB_OPTIONS) {
-    const btn = document.createElement('button');
-    btn.className = 'pb-btn';
-    btn.textContent = `⏮ ${opt.label}`;
-    btn.title = `Play from ${opt.label} ago`;
-    btn.dataset.minutes = opt.minutes;
-    btn.addEventListener('click', e => { e.stopPropagation(); jumpBack(camId, wrap, opt.minutes, btn); });
-    bar.appendChild(btn);
-  }
-
-  // Error message (persistent until next action)
-  const errMsg = document.createElement('span');
-  errMsg.className = 'pb-btn pb-err';
-  bar.appendChild(errMsg);
-
-  wrap.appendChild(bar);
-}
-
-async function jumpBack(camId, wrap, minutes, clickedBtn) {
-  const bar     = wrap.querySelector('.pb-bar');
-  const errMsg  = bar.querySelector('.pb-err');
-  const liveBtn = bar.querySelector('.pb-live');
-  const allBtns = bar.querySelectorAll('.pb-btn:not(.pb-err)');
-
-  // Loading state
-  const origText = clickedBtn.textContent;
-  allBtns.forEach(b => b.disabled = true);
-  clickedBtn.textContent = '…';
-  errMsg.style.display = 'none';
-
-  try {
-    const r = await fetch(`/api/playback/${camId}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ minutes_ago: minutes }),
-    });
-    const data = await r.json();
-
-    if (!r.ok || !data.found) {
-      const reason = data.reason || data.detail || 'No recording found';
-      errMsg.textContent = reason;
-      errMsg.style.display = '';
-      return;
-    }
-
-    // Swap live stream for playback video
-    wrap.querySelector('.pb-video')?.remove();
-    const video = document.createElement('video');
-    video.className = 'pb-video';
-    video.controls = true;
-    video.autoplay = true;
-    video.src = `/api/playback/${camId}/stream?filename=${encodeURIComponent(data.filename)}`;
-    video.addEventListener('loadedmetadata', () => {
-      video.currentTime = data.seek_offset_s ?? 0;
-      video.play().catch(() => {});
-    });
-    video.addEventListener('error', () => {
-      errMsg.textContent = 'Video stream error — check camera credentials';
-      errMsg.style.display = '';
-      video.remove();
-      setLiveActive(bar);
-    });
-    wrap.appendChild(video);
-
-    // Mark active rewind btn, deactivate Live
-    allBtns.forEach(b => b.classList.remove('active'));
-    clickedBtn.classList.add('active');
-    liveBtn.classList.remove('active');
-
-  } catch (err) {
-    console.error('Playback error:', err);
-    errMsg.textContent = 'Request failed';
-    errMsg.style.display = '';
-  } finally {
-    allBtns.forEach(b => b.disabled = false);
-    clickedBtn.textContent = origText;
-  }
-}
-
-function setLiveActive(bar) {
-  bar.querySelectorAll('.pb-btn:not(.pb-err)').forEach(b => b.classList.remove('active'));
-  bar.querySelector('.pb-live').classList.add('active');
-}
-
-function goLive(camId, wrap) {
-  const video = wrap.querySelector('.pb-video');
-  if (video) { video.pause(); video.src = ''; video.remove(); }
-  const bar = wrap.querySelector('.pb-bar');
-  if (bar) setLiveActive(bar);
-  wrap.querySelector('.pb-bar .pb-err').style.display = 'none';
-}
-
 // ── Build camera card ─────────────────────────────────────────────────────────
 
 const FS_ICON = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
@@ -770,8 +608,6 @@ function buildCard(cam) {
     else document.exitFullscreen();
   });
   wrap.appendChild(fsBtn);
-
-  if (cam.playback && cam.brand !== 'dahua') buildPlaybackBar(cam.id, wrap);
 
   if (cam.ptz) {
     const badge = document.createElement('div');

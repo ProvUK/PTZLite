@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Camera Setup — Reolink Viewer</title>
+  <title>Camera Setup — PTZLite</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -237,7 +237,8 @@
 
 <header>
   <h1>Camera Setup</h1>
-  <a href="/" class="back-btn">← Back to viewer</a>
+  <a href="/api/log?lines=500" target="_blank" class="back-btn" style="margin-left:auto; margin-right:8px;">📋 View Log</a>
+  <a href="/" class="back-btn" style="margin-left:0;">← Back to viewer</a>
 </header>
 
 <div class="page">
@@ -337,17 +338,6 @@
             </select>
           </div>
         </div>
-      </div>
-
-      <div class="form-section">
-        <div class="check-row">
-          <input type="checkbox" id="f-playback">
-          <label for="f-playback">Supports playback / recording</label>
-        </div>
-        <p class="field-hint" style="margin-left:25px;margin-top:2px">
-          Enable for cameras attached to an NVR or hub that stores recordings locally.
-          Adds jump-back buttons in the viewer. Leave unchecked for standalone cameras with no recording.
-        </p>
       </div>
 
       <div class="form-section">
@@ -463,7 +453,6 @@ function clearForm() {
   v('f-password').value = '';
   v('f-channel').value = '0';
   v('f-stream').value = 'sub';
-  v('f-playback').checked = false;
   v('f-ptz').checked = false;
   v('f-fov-h').value = '90';
   v('f-fov-v').value = '55';
@@ -488,7 +477,6 @@ function fillForm(cam) {
   v('f-password').value = cam.password ?? '';
   v('f-channel').value = cam.channel ?? 0;
   v('f-stream').value = cam.stream ?? 'sub';
-  v('f-playback').checked = !!cam.playback;
   v('f-ptz').checked = !!cam.ptz;
   v('f-fov-h').value = cam.fov_h ?? 90;
   v('f-fov-v').value = cam.fov_v ?? 55;
@@ -516,7 +504,6 @@ function formData() {
     password: v('f-password').value,
     channel:  parseInt(v('f-channel').value) || 0,
     stream:   v('f-stream').value,
-    playback: v('f-playback').checked,
     ptz:      ptz,
   };
   if (ptz) {

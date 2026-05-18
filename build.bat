@@ -1,7 +1,7 @@
 @echo off
 setlocal
 echo ============================================
-echo  Reolink Viewer - Build
+echo  PTZLite - Build
 echo ============================================
 echo.
 
@@ -22,11 +22,11 @@ if errorlevel 1 ( echo pip failed & pause & exit /b 1 )
 
 echo.
 echo [2/3] Building with PyInstaller...
-if exist "dist\Reolink Viewer" rmdir /s /q "dist\Reolink Viewer"
+if exist "dist\PTZLite" rmdir /s /q "dist\PTZLite"
 "%PYTHON%" -m PyInstaller ^
     --noconsole ^
     --onedir ^
-    --name "Reolink Viewer" ^
+    --name "PTZLite" ^
     --add-data "static;static" ^
     --hidden-import "pystray._win32" ^
     --hidden-import "PIL._imaging" ^
@@ -34,12 +34,12 @@ if exist "dist\Reolink Viewer" rmdir /s /q "dist\Reolink Viewer"
     --collect-all "starlette" ^
     --collect-all "fastapi" ^
     --collect-all "anyio" ^
-    reolink_viewer.py
+    ptzlite.py
 if errorlevel 1 ( echo PyInstaller failed & pause & exit /b 1 )
 
 echo Copying go2rtc into dist\bin\...
-if not exist "dist\Reolink Viewer\bin" mkdir "dist\Reolink Viewer\bin"
-copy /Y go2rtc.exe "dist\Reolink Viewer\bin\" >nul
+if not exist "dist\PTZLite\bin" mkdir "dist\PTZLite\bin"
+copy /Y go2rtc.exe "dist\PTZLite\bin\" >nul
 rem Note: config.yaml is NOT bundled (contains credentials).
 rem       Inno Setup ships config.example.yaml as config.yaml for first-time installs.
 
@@ -55,8 +55,8 @@ if "%ISCC%"=="" (
     echo NOTE: Inno Setup 6 not found - skipping installer.
     echo Install it from https://jrsoftware.org/isinfo.php then re-run.
     echo.
-    echo The raw build is at: dist\Reolink Viewer\
-    echo Run it directly: "dist\Reolink Viewer\Reolink Viewer.exe"
+    echo The raw build is at: dist\PTZLite\
+    echo Run it directly: "dist\PTZLite\PTZLite.exe"
     pause & exit /b 0
 )
 
@@ -66,7 +66,7 @@ if errorlevel 1 ( echo Inno Setup failed & pause & exit /b 1 )
 echo.
 echo ============================================
 echo  Done!
-echo    Installer : "Reolink Viewer Setup.exe"
-echo    Raw build : dist\Reolink Viewer\
+echo    Installer : "PTZLite Setup.exe"
+echo    Raw build : dist\PTZLite\
 echo ============================================
 pause
