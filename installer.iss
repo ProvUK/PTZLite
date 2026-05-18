@@ -12,6 +12,7 @@ DefaultGroupName       = {#AppName}
 DisableProgramGroupPage= yes
 OutputDir              = .
 OutputBaseFilename     = PTZLite Setup
+SetupIconFile          = favicon.ico
 Compression            = lzma2
 SolidCompression       = yes
 WizardStyle            = modern
