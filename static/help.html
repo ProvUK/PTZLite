@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Help — PTZLite</title>
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
+  <style>
+    :root {
+      --bg: #0d0d0d; --surface: #161616; --surface2: #222;
+      --border: #2a2a2a; --border2: #333;
+      --text: #e0e0e0; --text-muted: #666; --text-btn: #aaa;
+      --sidebar-w: 240px;
+    }
+    .light {
+      --bg: #f2f4f7; --surface: #ffffff; --surface2: #e8eaed;
+      --border: #d4d8de; --border2: #c0c5cc;
+      --text: #1a1a1a; --text-muted: #888; --text-btn: #555;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, sans-serif; min-height: 100vh; }
+
+    /* ── Header ── */
+    header {
+      display: flex; align-items: center; gap: 14px;
+      padding: 10px 18px; background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 20;
+    }
+    header img { height: 2em; }
+    header span { font-size: 1rem; font-weight: 600; }
+    .nav-links { display: flex; gap: 6px; margin-left: auto; }
+    .nav-links a, .nav-links button {
+      display: flex; align-items: center; justify-content: center;
+      height: 30px; padding: 0 12px;
+      background: var(--surface2); border: 1px solid var(--border2);
+      color: var(--text-btn); border-radius: 4px; font-size: 0.78rem;
+      text-decoration: none; cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+    .nav-links a:hover, .nav-links button:hover { background: #2563eb; color: #fff; border-color: #2563eb; }
+
+    /* ── Layout ── */
+    .shell { display: flex; min-height: calc(100vh - 52px); }
+
+    /* ── Sidebar ── */
+    nav {
+      width: var(--sidebar-w); flex-shrink: 0;
+      background: var(--surface); border-right: 1px solid var(--border);
+      padding: 20px 0; position: sticky; top: 52px;
+      height: calc(100vh - 52px); overflow-y: auto;
+    }
+    nav .section-label {
+      font-size: 0.68rem; font-weight: 700; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--text-muted);
+      padding: 14px 18px 6px;
+    }
+    nav a {
+      display: block; padding: 7px 18px;
+      font-size: 0.82rem; color: var(--text-muted); text-decoration: none;
+      border-left: 2px solid transparent;
+      transition: color 0.12s, border-color 0.12s;
+    }
+    nav a:hover { color: var(--text); }
+    nav a.active { color: #2563eb; border-left-color: #2563eb; font-weight: 600; }
+
+    /* ── Content ── */
+    main { flex: 1; padding: 36px 40px; max-width: 820px; }
+
+    .section { margin-bottom: 52px; }
+    .section h2 {
+      font-size: 1.3rem; font-weight: 700; margin-bottom: 6px;
+      padding-bottom: 10px; border-bottom: 1px solid var(--border);
+    }
+    .section h3 { font-size: 1rem; font-weight: 600; margin: 24px 0 8px; color: var(--text); }
+    .section p { font-size: 0.88rem; line-height: 1.75; color: var(--text-muted); margin-bottom: 10px; }
+    .section ul, .section ol { padding-left: 20px; margin-bottom: 10px; }
+    .section li { font-size: 0.88rem; line-height: 1.75; color: var(--text-muted); margin-bottom: 3px; }
+    .section strong { color: var(--text); }
+
+    .tip {
+      background: #1e3a5f; border: 1px solid #2563eb; border-radius: 6px;
+      padding: 12px 16px; margin: 14px 0; font-size: 0.84rem;
+      color: #93c5fd; line-height: 1.6;
+    }
+    .tip strong { color: #bfdbfe; }
+    .warn {
+      background: #431407; border: 1px solid #ea580c; border-radius: 6px;
+      padding: 12px 16px; margin: 14px 0; font-size: 0.84rem;
+      color: #fdba74; line-height: 1.6;
+    }
+
+    .field-table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 0.84rem; }
+    .field-table th {
+      text-align: left; padding: 8px 12px; font-size: 0.72rem;
+      font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+      color: var(--text-muted); border-bottom: 1px solid var(--border);
+    }
+    .field-table td { padding: 8px 12px; border-bottom: 1px solid var(--border); color: var(--text-muted); vertical-align: top; }
+    .field-table tr:last-child td { border-bottom: none; }
+    .field-table td:first-child { color: var(--text); font-weight: 600; white-space: nowrap; }
+
+    code {
+      background: var(--surface2); border: 1px solid var(--border2);
+      border-radius: 3px; padding: 1px 6px; font-size: 0.82em; font-family: monospace;
+    }
+  </style>
+</head>
+<body>
+<header>
+  <img src="/main-logo.png" alt="PTZLite">
+  <span>Help</span>
+  <div class="nav-links">
+    <a href="/about.html">About</a>
+    <a href="/settings.html">Settings</a>
+    <a href="/">&#8592; Back</a>
+    <button onclick="toggleTheme()" title="Toggle theme">&#9788;</button>
+  </div>
+</header>
+
+<div class="shell">
+  <nav id="sidebar">
+    <div class="section-label">Getting Started</div>
+    <a href="#first-launch">First launch</a>
+    <a href="#adding-cameras">Adding your first camera</a>
+
+    <div class="section-label">Camera Setup</div>
+    <a href="#camera-fields">Camera fields explained</a>
+    <a href="#reolink">Reolink cameras</a>
+    <a href="#reolink-hub">Reolink Home Hub Pro</a>
+    <a href="#dahua">Dahua cameras</a>
+    <a href="#onvif">Other ONVIF cameras</a>
+
+    <div class="section-label">Live Viewing</div>
+    <a href="#layouts">Grid layouts</a>
+    <a href="#streams">Main vs Sub stream</a>
+    <a href="#fullscreen">Fullscreen</a>
+    <a href="#pagination">Pagination</a>
+
+    <div class="section-label">PTZ Control</div>
+    <a href="#click-to-centre">Click to centre</a>
+    <a href="#joystick">Joystick drag</a>
+    <a href="#presets">Presets</a>
+
+    <div class="section-label">App</div>
+    <a href="#theme">Light / Dark mode</a>
+    <a href="#stream-health">Stream health</a>
+    <a href="#troubleshooting">Troubleshooting</a>
+  </nav>
+
+  <main>
+
+    <!-- ── Getting Started ── -->
+    <div class="section" id="first-launch">
+      <h2>First launch</h2>
+      <p>After installing PTZLite, it appears in your Start Menu and system tray. When launched it starts a local web server and opens your browser automatically at <code>http://localhost:8765</code>.</p>
+      <p>On first launch you will see an empty grid — no cameras are configured yet. Click the <strong>Settings</strong> (gear) icon in the top-right of the header to add your first camera.</p>
+      <div class="tip"><strong>Tip:</strong> PTZLite runs entirely on your local network. No data is sent to the internet and no account is required.</div>
+    </div>
+
+    <div class="section" id="adding-cameras">
+      <h2>Adding your first camera</h2>
+      <ol>
+        <li>Click the <strong>Settings</strong> icon (&#9881;) in the header.</li>
+        <li>Click <strong>Add Camera</strong> at the bottom of the camera list.</li>
+        <li>Fill in the camera details — see <a href="#camera-fields">Camera fields explained</a> below.</li>
+        <li>Click <strong>Test Connection</strong> to verify the RTSP stream is reachable before saving.</li>
+        <li>Click <strong>Save</strong>. The camera will appear in the viewer immediately.</li>
+      </ol>
+      <div class="tip"><strong>Tip:</strong> Make sure your camera is on the same local network as your PC and that RTSP is enabled in the camera's own settings.</div>
+    </div>
+
+    <!-- ── Camera Setup ── -->
+    <div class="section" id="camera-fields">
+      <h2>Camera fields explained</h2>
+      <table class="field-table">
+        <tr><th>Field</th><th>Description</th></tr>
+        <tr><td>Name</td><td>Display label shown on the camera tile in the viewer.</td></tr>
+        <tr><td>Brand</td><td>Choose <strong>Reolink</strong>, <strong>Dahua</strong>, or <strong>ONVIF</strong>. This controls how PTZ commands are sent.</td></tr>
+        <tr><td>IP Address</td><td>The local IP address of the camera or NVR (e.g. <code>192.168.0.100</code>).</td></tr>
+        <tr><td>Username</td><td>Camera login username — usually <code>admin</code>.</td></tr>
+        <tr><td>Password</td><td>Camera login password.</td></tr>
+        <tr><td>Channel</td><td>For NVRs with multiple cameras, the zero-based channel number (0 = first camera, 1 = second, etc.). Single cameras use 0.</td></tr>
+        <tr><td>Stream</td><td>Default stream quality: <strong>Main</strong> (high resolution) or <strong>Sub</strong> (lower resolution, lower bandwidth). Can be toggled live from the viewer.</td></tr>
+        <tr><td>PTZ</td><td>Enable PTZ controls (click-to-centre, joystick, presets) for this camera. Disable for fixed cameras.</td></tr>
+        <tr><td>Enabled</td><td>When disabled, the camera is hidden from the viewer and its stream is not started.</td></tr>
+      </table>
+    </div>
+
+    <div class="section" id="reolink">
+      <h2>Reolink cameras</h2>
+      <p>Reolink cameras use the native Reolink HTTP API for PTZ commands. Set <strong>Brand</strong> to <strong>Reolink</strong>.</p>
+      <h3>RTSP stream URLs</h3>
+      <p>PTZLite builds the RTSP URL automatically using the format:</p>
+      <p><code>rtsp://username:password@ip:554/h264Preview_01_main</code></p>
+      <p>The channel number is added to the stream name (channel 0 = <code>_01_</code>, channel 1 = <code>_02_</code>, etc.).</p>
+      <h3>Requirements</h3>
+      <ul>
+        <li>RTSP must be enabled in the camera's Network settings.</li>
+        <li>The camera must be on the same subnet as your PC.</li>
+        <li>Default RTSP port is 554 — do not change unless your camera uses a custom port.</li>
+      </ul>
+    </div>
+
+    <div class="section" id="reolink-hub">
+      <h2>Reolink Home Hub Pro</h2>
+      <p>The Hub Pro is an NVR that connects cameras wirelessly. Each physical camera appears as a separate channel. Add one entry in PTZLite per camera channel.</p>
+      <h3>Setup</h3>
+      <ul>
+        <li>Set <strong>IP</strong> to the Hub Pro's IP address (not the individual camera's IP — cameras are wireless and have no direct IP).</li>
+        <li>Set <strong>Channel</strong> to the camera's channel number as shown in the Reolink app (0-based: first camera = 0, second = 1, etc.).</li>
+        <li>Use the same admin username and password as the Hub Pro itself.</li>
+      </ul>
+      <h3>Recommended stream setting</h3>
+      <p>Use <strong>Sub</strong> stream for Hub Pro cameras. The main stream uses H.265 which some browsers cannot decode. The sub stream uses H.264 and plays reliably in all browsers.</p>
+      <div class="tip"><strong>Tip:</strong> If you see a black screen or buffering on a Hub Pro camera, switch to Sub stream using the Main/Sub buttons in the header.</div>
+    </div>
+
+    <div class="section" id="dahua">
+      <h2>Dahua cameras</h2>
+      <p>Dahua cameras use a different RTSP URL format and the CGI API for PTZ. Set <strong>Brand</strong> to <strong>Dahua</strong>.</p>
+      <p>PTZLite uses absolute position PTZ control for Dahua cameras, mirroring the behaviour of SmartPSS. Click-to-centre calculates the target pan/tilt from the current position and moves directly to it.</p>
+      <h3>RTSP URL format used</h3>
+      <p><code>rtsp://username:password@ip:554/cam/realmonitor?channel=1&subtype=0</code></p>
+      <p><code>subtype=0</code> is main stream, <code>subtype=1</code> is sub stream.</p>
+    </div>
+
+    <div class="section" id="onvif">
+      <h2>Other ONVIF cameras</h2>
+      <p>Any ONVIF-compatible camera can be added for live streaming. Set <strong>Brand</strong> to <strong>ONVIF</strong>.</p>
+      <p>PTZ support for ONVIF cameras uses the standard ONVIF ContinuousMove and RelativeMove commands. Results vary by camera — not all cameras implement the full ONVIF PTZ profile.</p>
+      <div class="warn"><strong>Note:</strong> Click-to-centre accuracy depends on the camera reporting its current position via ONVIF. Cameras that do not expose position feedback will use timed movement estimates which are less precise.</div>
+    </div>
+
+    <!-- ── Live Viewing ── -->
+    <div class="section" id="layouts">
+      <h2>Grid layouts</h2>
+      <p>Use the layout buttons in the header to choose how many cameras are shown at once:</p>
+      <table class="field-table">
+        <tr><th>Layout</th><th>Cameras shown</th><th>Best for</th></tr>
+        <tr><td>1×1</td><td>1</td><td>Single camera focus or fullscreen monitoring</td></tr>
+        <tr><td>2×1</td><td>2</td><td>Side-by-side comparison of two cameras</td></tr>
+        <tr><td>2×2</td><td>4</td><td>Standard 4-camera overview</td></tr>
+        <tr><td>3×2</td><td>6</td><td>Medium installations</td></tr>
+        <tr><td>3×3</td><td>9</td><td>Larger installations</td></tr>
+        <tr><td>4×4</td><td>16</td><td>Large sites with many cameras</td></tr>
+      </table>
+      <p>If you have more cameras than fit in the current layout, pagination arrows appear automatically — use them to move between pages.</p>
+      <p>When you first open the viewer, PTZLite automatically selects the best layout for your number of cameras.</p>
+    </div>
+
+    <div class="section" id="streams">
+      <h2>Main vs Sub stream</h2>
+      <p>The <strong>Main</strong> and <strong>Sub</strong> buttons in the header switch all cameras between their high-resolution and low-resolution streams.</p>
+      <ul>
+        <li><strong>Main stream</strong> — full resolution (e.g. 4K or 5MP). Higher bandwidth, may stutter on slower networks or with many cameras.</li>
+        <li><strong>Sub stream</strong> — reduced resolution (typically 720p). Lower bandwidth, smoother with many cameras.</li>
+      </ul>
+      <p>Switching streams reconnects all video feeds — expect a brief pause while streams restart.</p>
+      <div class="tip"><strong>Tip:</strong> If you are viewing 9 or 16 cameras simultaneously, Sub stream will give significantly smoother playback.</div>
+    </div>
+
+    <div class="section" id="fullscreen">
+      <h2>Fullscreen</h2>
+      <p>Hover over any camera tile to reveal a fullscreen button in the top-right corner of that tile. Click it to expand that camera to fill the screen.</p>
+      <p>Press <strong>Esc</strong> or click the button again to exit fullscreen.</p>
+    </div>
+
+    <div class="section" id="pagination">
+      <h2>Pagination</h2>
+      <p>When you have more cameras than the current layout can show, navigation arrows (<strong>‹</strong> and <strong>›</strong>) appear in the header alongside a page counter.</p>
+      <p>Click the arrows to move between pages. Each page shows a full grid of cameras.</p>
+    </div>
+
+    <!-- ── PTZ Control ── -->
+    <div class="section" id="click-to-centre">
+      <h2>Click to centre</h2>
+      <p>For PTZ-enabled cameras, click anywhere on the camera image to pan and tilt so that point becomes the new centre of the frame.</p>
+      <p>A ripple animation confirms where you clicked. The camera moves and the view updates within a second or two depending on the camera's speed.</p>
+      <div class="tip"><strong>Tip:</strong> Click-to-centre works best on Reolink and Dahua cameras. ONVIF accuracy depends on the camera model.</div>
+    </div>
+
+    <div class="section" id="joystick">
+      <h2>Joystick drag</h2>
+      <p>Click and <strong>hold</strong> on a PTZ camera image, then drag in any direction to move the camera continuously. Release to stop.</p>
+      <ul>
+        <li>Drag distance from the start point controls speed — drag further for faster movement.</li>
+        <li>A ring and knob indicator appears to show the joystick position.</li>
+        <li>Release the mouse to stop the camera.</li>
+      </ul>
+      <p>If you click and release quickly (without dragging), it is treated as a click-to-centre rather than a joystick command.</p>
+    </div>
+
+    <div class="section" id="presets">
+      <h2>Presets</h2>
+      <p>Camera presets are saved PTZ positions. If your camera has presets configured, they appear as buttons along the bottom of the camera tile.</p>
+      <p>Click a preset button to move the camera to that saved position instantly.</p>
+      <p>Presets are defined on the camera itself (via the Reolink app, SmartPSS, or the camera's web interface) and read automatically by PTZLite — you do not define them in PTZLite.</p>
+    </div>
+
+    <!-- ── App ── -->
+    <div class="section" id="theme">
+      <h2>Light / Dark mode</h2>
+      <p>Click the sun/moon icon in the header to switch between dark and light mode. Your preference is saved and remembered across sessions.</p>
+    </div>
+
+    <div class="section" id="stream-health">
+      <h2>Stream health</h2>
+      <p>The small dot in the header shows the status of the go2rtc stream engine:</p>
+      <ul>
+        <li><strong style="color:#22c55e">Green</strong> — stream engine running normally.</li>
+        <li><strong style="color:#ef4444">Red</strong> — stream engine offline or unresponsive.</li>
+        <li><strong>Grey</strong> — checking status.</li>
+      </ul>
+      <p>Click the dot to force a reconnect. PTZLite also checks health every 15 seconds and restarts go2rtc automatically if it goes offline.</p>
+      <p>Individual cameras show an <strong>⚠ Stream offline</strong> overlay if their specific stream stops. Click <strong>Reconnect</strong> on the overlay to restart all streams.</p>
+    </div>
+
+    <div class="section" id="troubleshooting">
+      <h2>Troubleshooting</h2>
+
+      <h3>Black screen / buffering on camera</h3>
+      <ul>
+        <li>Switch to <strong>Sub stream</strong> — main stream may be H.265 which some browsers cannot decode (particularly on Reolink Hub Pro).</li>
+        <li>Check the camera is online and reachable by pinging its IP from your PC.</li>
+        <li>Check that RTSP is enabled in the camera's own settings.</li>
+        <li>Click the green/red dot in the header to restart the stream engine.</li>
+      </ul>
+
+      <h3>PTZ click does nothing</h3>
+      <ul>
+        <li>Confirm <strong>PTZ</strong> is enabled for that camera in Settings.</li>
+        <li>Check the camera's username and password are correct — PTZ uses the same credentials as streaming.</li>
+        <li>Ensure the camera is a PTZ model — fixed cameras cannot pan or tilt.</li>
+      </ul>
+
+      <h3>Camera added but not showing in viewer</h3>
+      <ul>
+        <li>Check the camera is set to <strong>Enabled</strong> in Settings.</li>
+        <li>If you recently added the camera, the viewer may need a browser refresh (<code>F5</code>).</li>
+      </ul>
+
+      <h3>App doesn't open on launch</h3>
+      <ul>
+        <li>Check the system tray — PTZLite may be running but the browser didn't open automatically. Right-click the tray icon and choose <strong>Open</strong>.</li>
+        <li>If the tray icon is missing, the app may have crashed on startup. Check for a <code>startup_error.log</code> file in <code>%LOCALAPPDATA%\Programs\PTZLite\</code>.</li>
+        <li>Port 8765 may be in use by another application. Check the log file for a port conflict error.</li>
+      </ul>
+
+      <h3>Stream engine shows red / streams not loading</h3>
+      <ul>
+        <li>Click the red dot to attempt a restart.</li>
+        <li>If it stays red, check <code>ptzlite.log</code> in <code>%LOCALAPPDATA%\Programs\PTZLite\</code> for error details.</li>
+        <li>Antivirus software may be blocking go2rtc — add an exception for the PTZLite install folder.</li>
+      </ul>
+    </div>
+
+  </main>
+</div>
+
+<script>
+  function applyTheme(light) { document.body.classList.toggle('light', light); }
+  function toggleTheme() {
+    const light = !document.body.classList.contains('light');
+    localStorage.setItem('theme', light ? 'light' : 'dark');
+    applyTheme(light);
+  }
+  applyTheme(localStorage.getItem('theme') === 'light');
+
+  // Highlight active sidebar link on scroll
+  const sections = document.querySelectorAll('.section[id]');
+  const navLinks = document.querySelectorAll('nav a[href^="#"]');
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        navLinks.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + e.target.id));
+      }
+    });
+  }, { rootMargin: '-20% 0px -70% 0px' });
+  sections.forEach(s => observer.observe(s));
+</script>
+</body>
+</html>

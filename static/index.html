@@ -85,14 +85,14 @@
     #nav-btns button { padding: 4px 8px; }
     #page-info { font-size: 0.72rem; color: var(--text-muted); min-width: 36px; text-align: center; }
 
-    #settings-btn, #theme-btn {
+    #settings-btn, #theme-btn, #about-btn, #help-btn {
       display: flex; align-items: center; justify-content: center;
       width: 30px; height: 30px;
       background: var(--surface2); border: 1px solid var(--border2); border-radius: 4px;
       color: var(--text-btn); text-decoration: none; cursor: pointer;
       transition: background 0.15s, color 0.15s;
     }
-    #settings-btn:hover, #theme-btn:hover { background: #2563eb; color: #fff; border-color: #2563eb; }
+    #settings-btn:hover, #theme-btn:hover, #about-btn:hover, #help-btn:hover { background: #2563eb; color: #fff; border-color: #2563eb; }
 
     #grid {
       flex: 1;
@@ -318,6 +318,12 @@
     <button id="next-btn" onclick="changePage(1)">&#8250;</button>
   </div>
   <div id="rtc-status" title="Stream engine — click to reconnect" onclick="reconnectStreams()"></div>
+  <a href="/about.html" id="about-btn" title="About PTZLite">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+  </a>
+  <a href="/help.html" id="help-btn" title="Help">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+  </a>
   <button id="theme-btn" title="Toggle light/dark mode" onclick="toggleTheme()">
     <svg id="theme-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
@@ -377,6 +383,9 @@ const LAYOUTS = [
   { label: '1×1', cols: 1, rows: 1 },
   { label: '2×1', cols: 2, rows: 1 },
   { label: '2×2', cols: 2, rows: 2 },
+  { label: '3×2', cols: 3, rows: 2 },
+  { label: '3×3', cols: 3, rows: 3 },
+  { label: '4×4', cols: 4, rows: 4 },
 ];
 
 let _layout  = LAYOUTS[2];
@@ -429,7 +438,10 @@ function changePage(delta) {
 function defaultLayout(n) {
   if (n <= 1) return LAYOUTS[0];
   if (n <= 2) return LAYOUTS[1];
-  return LAYOUTS[2];
+  if (n <= 4) return LAYOUTS[2];
+  if (n <= 6) return LAYOUTS[3];
+  if (n <= 9) return LAYOUTS[4];
+  return LAYOUTS[5];
 }
 
 // ── PTZ Joystick ─────────────────────────────────────────────────────────────
