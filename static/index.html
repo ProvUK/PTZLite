@@ -281,7 +281,7 @@
 <body>
 
 <header>
-  <h1>PTZLite</h1>
+  <h1>PTZLite <span id="app-version" style="font-size:0.45em;font-weight:400;opacity:0.6;vertical-align:middle"></span></h1>
   <span id="cam-count"></span>
   <div id="stream-btns">
     <button data-stream="main" class="active">Main</button>
@@ -754,6 +754,9 @@ function monitorCard(wrap, vs) {
 
 async function init() {
   await customElements.whenDefined('video-rtc');
+  fetch('/api/version').then(r => r.json()).then(d => {
+    document.getElementById('app-version').textContent = `v${d.version}`;
+  }).catch(() => {});
   const cameras = await (await fetch('/cameras')).json();
   const n = cameras.length;
 

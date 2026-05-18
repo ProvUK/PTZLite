@@ -198,6 +198,8 @@ GO2RTC_BIN  = _BUNDLE_DIR / "bin" / "go2rtc.exe"
 GO2RTC_PORT = 1984
 _STATIC_DIR = _BUNDLE_DIR / "static"
 
+APP_VERSION = "5.26"
+
 app = FastAPI(title="PTZLite")
 
 # ── Config ─────────────────────────────────────────────────────────────────────
@@ -1305,6 +1307,11 @@ async def api_go2rtc_health():
         "recent_errors": errors[-15:],
         "log_tail": recent[-15:],
     }
+
+
+@app.get("/api/version")
+async def api_version():
+    return {"version": APP_VERSION}
 
 
 @app.post("/api/go2rtc/restart")
