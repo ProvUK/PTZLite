@@ -10,11 +10,34 @@
     customElements.define('video-rtc', VideoRTC);
   </script>
   <style>
+    :root {
+      --bg:         #0d0d0d;
+      --surface:    #161616;
+      --surface2:   #222;
+      --border:     #2a2a2a;
+      --border2:    #333;
+      --text:       #e0e0e0;
+      --text-muted: #666;
+      --text-btn:   #aaa;
+      --cam-bg:     #111;
+    }
+    .light {
+      --bg:         #f2f4f7;
+      --surface:    #ffffff;
+      --surface2:   #e8eaed;
+      --border:     #d4d8de;
+      --border2:    #c0c5cc;
+      --text:       #1a1a1a;
+      --text-muted: #888;
+      --text-btn:   #555;
+      --cam-bg:     #d8dce2;
+    }
+
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
-      background: #0d0d0d;
-      color: #e0e0e0;
+      background: var(--bg);
+      color: var(--text);
       font-family: system-ui, -apple-system, sans-serif;
       height: 100vh;
       display: flex;
@@ -27,13 +50,13 @@
       align-items: center;
       gap: 10px;
       padding: 8px 14px;
-      background: #161616;
-      border-bottom: 1px solid #2a2a2a;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
       flex-shrink: 0;
     }
 
     header h1 { font-size: 1rem; font-weight: 600; letter-spacing: 0.02em; }
-    #cam-count { font-size: 0.78rem; color: #555; }
+    #cam-count { font-size: 0.78rem; color: var(--text-muted); }
 
     #stream-btns, #layout-btns, #nav-btns {
       display: flex;
@@ -45,9 +68,9 @@
     #stream-btns button,
     #layout-btns button,
     #nav-btns button {
-      background: #222;
-      border: 1px solid #333;
-      color: #aaa;
+      background: var(--surface2);
+      border: 1px solid var(--border2);
+      color: var(--text-btn);
       border-radius: 4px;
       padding: 4px 10px;
       font-size: 0.75rem;
@@ -60,16 +83,16 @@
 
     #nav-btns button:disabled { opacity: 0.3; cursor: default; pointer-events: none; }
     #nav-btns button { padding: 4px 8px; }
-    #page-info { font-size: 0.72rem; color: #555; min-width: 36px; text-align: center; }
+    #page-info { font-size: 0.72rem; color: var(--text-muted); min-width: 36px; text-align: center; }
 
-    #settings-btn {
+    #settings-btn, #theme-btn {
       display: flex; align-items: center; justify-content: center;
       width: 30px; height: 30px;
-      background: #222; border: 1px solid #333; border-radius: 4px;
-      color: #aaa; text-decoration: none;
+      background: var(--surface2); border: 1px solid var(--border2); border-radius: 4px;
+      color: var(--text-btn); text-decoration: none; cursor: pointer;
       transition: background 0.15s, color 0.15s;
     }
-    #settings-btn:hover { background: #2563eb; color: #fff; border-color: #2563eb; }
+    #settings-btn:hover, #theme-btn:hover { background: #2563eb; color: #fff; border-color: #2563eb; }
 
     #grid {
       flex: 1;
@@ -81,7 +104,7 @@
 
     .cam-wrap {
       position: relative;
-      background: #111;
+      background: var(--cam-bg);
       border-radius: 4px;
       overflow: hidden;
       display: flex;
@@ -295,6 +318,11 @@
     <button id="next-btn" onclick="changePage(1)">&#8250;</button>
   </div>
   <div id="rtc-status" title="Stream engine — click to reconnect" onclick="reconnectStreams()"></div>
+  <button id="theme-btn" title="Toggle light/dark mode" onclick="toggleTheme()">
+    <svg id="theme-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+    </svg>
+  </button>
   <a href="/settings.html" id="settings-btn" title="Camera setup">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
@@ -319,9 +347,23 @@ function setStream(stream) {
   document.querySelectorAll('#stream-btns button').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.stream === stream);
   });
-  document.querySelectorAll('[data-cam-id]').forEach(el => {
-    el.src = streamSrc(el.dataset.camId);
-  });
+  renderGrid(); // destroy + recreate elements — reliable reconnect
+}
+
+// ── Theme ─────────────────────────────────────────────────────────────────────
+const MOON_ICON = `<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>`;
+const SUN_ICON  = `<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>`;
+
+function applyTheme(light) {
+  document.body.classList.toggle('light', light);
+  document.getElementById('theme-icon').innerHTML = light ? SUN_ICON : MOON_ICON;
+  document.getElementById('theme-btn').title = light ? 'Switch to dark mode' : 'Switch to light mode';
+}
+
+function toggleTheme() {
+  const light = !document.body.classList.contains('light');
+  localStorage.setItem('theme', light ? 'light' : 'dark');
+  applyTheme(light);
 }
 
 document.getElementById('stream-btns').addEventListener('click', e => {
@@ -755,6 +797,7 @@ function monitorCard(wrap, vs) {
 
 async function init() {
   await customElements.whenDefined('video-rtc');
+  applyTheme(localStorage.getItem('theme') === 'light');
   fetch('/api/version').then(r => r.json()).then(d => {
     document.getElementById('app-version').textContent = `v${d.version}`;
   }).catch(() => {});
