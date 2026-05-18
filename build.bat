@@ -28,6 +28,7 @@ if exist "dist\PTZLite" rmdir /s /q "dist\PTZLite"
     --onedir ^
     --name "PTZLite" ^
     --add-data "static;static" ^
+    --add-binary "go2rtc.exe;bin" ^
     --hidden-import "pystray._win32" ^
     --hidden-import "PIL._imaging" ^
     --collect-all "uvicorn" ^
@@ -36,10 +37,6 @@ if exist "dist\PTZLite" rmdir /s /q "dist\PTZLite"
     --collect-all "anyio" ^
     ptzlite.py
 if errorlevel 1 ( echo PyInstaller failed & pause & exit /b 1 )
-
-echo Copying go2rtc into dist\bin\...
-if not exist "dist\PTZLite\bin" mkdir "dist\PTZLite\bin"
-copy /Y go2rtc.exe "dist\PTZLite\bin\" >nul
 rem Note: config.yaml is NOT bundled (contains credentials).
 rem       Inno Setup ships config.example.yaml as config.yaml for first-time installs.
 
