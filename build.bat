@@ -27,6 +27,7 @@ if exist "dist\PTZLite" rmdir /s /q "dist\PTZLite"
     --noconsole ^
     --onedir ^
     --name "PTZLite" ^
+    --icon "favicon.ico" ^
     --add-data "static;static" ^
     --add-binary "go2rtc.exe;bin" ^
     --hidden-import "pystray._win32" ^

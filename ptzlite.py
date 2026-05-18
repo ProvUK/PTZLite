@@ -179,6 +179,7 @@ import aiohttp
 import uvicorn
 import yaml
 from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -1479,6 +1480,9 @@ async def api_get_log(lines: int = 500):
 
 @app.get("/favicon.ico", include_in_schema=False)
 async def favicon():
+    ico = _STATIC_DIR / "favicon.ico"
+    if ico.exists():
+        return FileResponse(str(ico), media_type="image/x-icon")
     return Response(status_code=204)
 
 
