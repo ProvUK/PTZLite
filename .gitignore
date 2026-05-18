@@ -12,3 +12,4 @@ build/
 test_vod.py
 reolink_viewer.py
 Reolink Viewer.spec
+*.spec
