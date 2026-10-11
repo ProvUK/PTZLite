@@ -39,7 +39,11 @@ cameras:
     ptz_speed: 40           # 1-63
     zoom_speed: 63          # 1-63
     zoom_step_s: 0.3        # seconds per zoom tick
-    ptz_degrees_per_second: 20
+    ptz_degrees_per_second: 20   # fallback speed for timed click-to-centre
+    pan_degrees_per_second: null # optional horizontal override; null = use fallback
+    tilt_degrees_per_second: null # optional vertical override; null = use fallback
+    legacy_ptz_aim: false        # true = old linear click math for easy rollback
+    ptz_min_move_s: 0.1          # lower if high speed values appear to stop changing movement
     monitor_preset: 0       # preset ID to return to (omit or null for none)
     pan_invert: false
     tilt_invert: false

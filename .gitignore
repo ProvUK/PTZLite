@@ -13,3 +13,9 @@ test_vod.py
 reolink_viewer.py
 Reolink Viewer.spec
 *.spec
+
+# Local/runtime artefacts
+_session_backup_*/
+browser_profile/
+*.log
+config.yaml.bak*

@@ -78,6 +78,27 @@
     .section li { font-size: 0.88rem; line-height: 1.75; color: var(--text-muted); margin-bottom: 3px; }
     .section strong { color: var(--text); }
 
+    /* Quick start table */
+    .qs-table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+    .qs-table th {
+      text-align: left; padding: 8px 14px; font-size: 0.72rem;
+      font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+      color: var(--text-muted); border-bottom: 2px solid var(--border);
+    }
+    .qs-table td {
+      padding: 9px 14px; border-bottom: 1px solid var(--border);
+      font-size: 0.86rem; line-height: 1.6; vertical-align: middle;
+    }
+    .qs-table tr:last-child td { border-bottom: none; }
+    .qs-table td:first-child { white-space: nowrap; }
+    .kbd {
+      display: inline-block;
+      background: var(--surface2); border: 1px solid var(--border2);
+      border-radius: 4px; padding: 2px 8px; font-size: 0.8em;
+      font-family: system-ui, sans-serif; font-weight: 600;
+      color: var(--text); white-space: nowrap;
+    }
+
     .tip {
       background: #1e3a5f; border: 1px solid #2563eb; border-radius: 6px;
       padding: 12px 16px; margin: 14px 0; font-size: 0.84rem;
@@ -89,6 +110,7 @@
       padding: 12px 16px; margin: 14px 0; font-size: 0.84rem;
       color: #fdba74; line-height: 1.6;
     }
+    .warn strong { color: #fed7aa; }
 
     .field-table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 0.84rem; }
     .field-table th {
@@ -121,53 +143,148 @@
 <div class="shell">
   <nav id="sidebar">
     <div class="section-label">Getting Started</div>
+    <a href="#quick-start">Quick start</a>
     <a href="#first-launch">First launch</a>
-    <a href="#adding-cameras">Adding your first camera</a>
+    <a href="#adding-cameras">Adding a camera</a>
 
     <div class="section-label">Camera Setup</div>
     <a href="#camera-fields">Camera fields explained</a>
+    <a href="#pages-groups">Pages &amp; groups</a>
+    <a href="#crop-mode">Fill frame (crop mode)</a>
     <a href="#reolink">Reolink cameras</a>
     <a href="#reolink-hub">Reolink Home Hub Pro</a>
     <a href="#dahua">Dahua cameras</a>
     <a href="#onvif">Other ONVIF cameras</a>
+    <a href="#manage-cameras">Managing cameras</a>
 
     <div class="section-label">Live Viewing</div>
     <a href="#layouts">Grid layouts</a>
     <a href="#streams">Main vs Sub stream</a>
     <a href="#fullscreen">Fullscreen</a>
-    <a href="#pagination">Pagination</a>
+    <a href="#labels">Camera labels</a>
+    <a href="#audio">Audio control</a>
+    <a href="#snapshot">Snapshot</a>
+    <a href="#digital-zoom">Digital zoom</a>
+    <a href="#pagination">Pages &amp; pagination</a>
+    <a href="#keep-live">Keep streams live</a>
 
     <div class="section-label">PTZ Control</div>
     <a href="#click-to-centre">Click to centre</a>
     <a href="#joystick">Joystick drag</a>
+    <a href="#touch-ptz">Touch / mobile PTZ</a>
+    <a href="#optical-zoom">Optical zoom</a>
     <a href="#presets">Presets</a>
 
     <div class="section-label">App</div>
     <a href="#theme">Light / Dark mode</a>
-    <a href="#stream-health">Stream health</a>
+    <a href="#security">Security &amp; password</a>
+    <a href="#tray-hotkey">System tray &amp; hotkey</a>
+    <a href="#stream-health">Stream health &amp; reconnect</a>
+    <a href="#view-log">View log</a>
     <a href="#troubleshooting">Troubleshooting</a>
   </nav>
 
   <main>
 
+    <!-- ── Quick Start ── -->
+    <div class="section" id="quick-start">
+      <h2>Quick start</h2>
+      <p>Common actions at a glance. Everything works with mouse, touch, or keyboard — no configuration needed beyond adding your cameras.</p>
+
+      <h3>Viewing</h3>
+      <table class="qs-table">
+        <tr><th>Action</th><th>How</th></tr>
+        <tr>
+          <td><strong>Camera fullscreen</strong></td>
+          <td><span class="kbd">Double left-click</span> on any camera tile — fills the screen with that camera at <strong>Main stream</strong> quality. Press <span class="kbd">Esc</span> or double right-click to return to the previous stream.</td>
+        </tr>
+        <tr>
+          <td><strong>Exit fullscreen</strong></td>
+          <td><span class="kbd">Double right-click</span> anywhere on a camera tile, or press <span class="kbd">Esc</span>.</td>
+        </tr>
+        <tr>
+          <td><strong>Fullscreen grid</strong></td>
+          <td>Click the fullscreen icon (⛶) in the header to expand the entire grid — hides all browser chrome.</td>
+        </tr>
+        <tr>
+          <td><strong>Switch layout</strong></td>
+          <td>Click a layout button in the header: <strong>1×1 · 2×1 · 2×2 · 3×2 · 3×3 · 4×4</strong>.</td>
+        </tr>
+        <tr>
+          <td><strong>Switch stream quality</strong></td>
+          <td>Click <strong>Main</strong> or <strong>Sub</strong> in the header to switch all cameras between full and reduced resolution.</td>
+        </tr>
+        <tr>
+          <td><strong>Open from tray</strong></td>
+          <td><span class="kbd">Ctrl</span>+<span class="kbd">Alt</span>+<span class="kbd">Z</span> global hotkey — opens the viewer even when PTZLite is only in the system tray.</td>
+        </tr>
+      </table>
+
+      <h3>PTZ control (on PTZ-enabled cameras)</h3>
+      <table class="qs-table">
+        <tr><th>Action</th><th>How</th></tr>
+        <tr>
+          <td><strong>Click to centre</strong></td>
+          <td><span class="kbd">Single left-click</span> — pan and tilt so the clicked point becomes the new centre of the frame. A ripple confirms the target.</td>
+        </tr>
+        <tr>
+          <td><strong>Joystick control</strong></td>
+          <td><span class="kbd">Left-click and hold, then drag</span> in any direction — moves the camera continuously. Release to stop. Drag distance controls speed.</td>
+        </tr>
+        <tr>
+          <td><strong>Digital zoom</strong></td>
+          <td><span class="kbd">Scroll wheel</span> — zoom into the video client-side (software zoom, no camera movement).</td>
+        </tr>
+        <tr>
+          <td><strong>Optical zoom</strong></td>
+          <td><span class="kbd">Hold right mouse button + scroll wheel</span> — drives the camera's physical zoom motor in or out.</td>
+        </tr>
+        <tr>
+          <td><strong>Pan while zoomed in</strong></td>
+          <td><span class="kbd">Click and drag</span> — when digitally zoomed in, dragging pans the zoomed view instead of moving the camera.</td>
+        </tr>
+        <tr>
+          <td><strong>Go to preset</strong></td>
+          <td>Click a <strong>preset button</strong> along the bottom of the camera tile.</td>
+        </tr>
+      </table>
+
+      <h3>Camera tile hover buttons</h3>
+      <p>Hover over any camera tile to reveal these controls:</p>
+      <table class="qs-table">
+        <tr><th>Button</th><th>Position</th><th>Action</th></tr>
+        <tr><td><strong>⛶ Fullscreen</strong></td><td>Top-right</td><td>Expand this camera to fill the screen.</td></tr>
+        <tr><td><strong>🎵 Audio</strong></td><td>Bottom-right (inner)</td><td>Mute / unmute the camera's audio stream.</td></tr>
+        <tr><td><strong>📷 Snapshot</strong></td><td>Bottom-right (outer)</td><td>Save the current frame as a PNG image.</td></tr>
+      </table>
+    </div>
+
     <!-- ── Getting Started ── -->
     <div class="section" id="first-launch">
       <h2>First launch</h2>
-      <p>After installing PTZLite, it appears in your Start Menu and system tray. When launched it starts a local web server and opens your browser automatically at <code>http://localhost:8765</code>.</p>
-      <p>On first launch you will see an empty grid — no cameras are configured yet. Click the <strong>Settings</strong> (gear) icon in the top-right of the header to add your first camera.</p>
+      <p>After installing PTZLite, it appears in your Start Menu. When launched it starts a local web server on port 8765 and opens your browser automatically at <code>http://localhost:8765</code>.</p>
+      <p>On first launch you will see an empty grid — no cameras are configured yet. Click the <strong>Settings</strong> (gear ⚙) icon in the top-right of the header to add your first camera.</p>
+      <h3>System tray</h3>
+      <p>PTZLite runs as a background service in the Windows system tray (bottom-right of your taskbar). Right-click the tray icon to access:</p>
+      <ul>
+        <li><strong>Open Viewer</strong> — opens the viewer in your browser (same as double-clicking the icon).</li>
+        <li><strong>Settings</strong> — opens the camera settings page directly.</li>
+        <li><strong>Exit</strong> — shuts down PTZLite completely.</li>
+      </ul>
+      <p>You can also press <strong>Ctrl+Alt+Z</strong> at any time — even when the browser is closed — to open the viewer instantly. See <a href="#tray-hotkey">System tray &amp; hotkey</a> for details.</p>
       <div class="tip"><strong>Tip:</strong> PTZLite runs entirely on your local network. No data is sent to the internet and no account is required.</div>
     </div>
 
     <div class="section" id="adding-cameras">
-      <h2>Adding your first camera</h2>
+      <h2>Adding a camera</h2>
       <ol>
-        <li>Click the <strong>Settings</strong> icon (&#9881;) in the header.</li>
-        <li>Click <strong>Add Camera</strong> at the bottom of the camera list.</li>
+        <li>Click the <strong>Settings</strong> icon (⚙) in the header.</li>
+        <li>Click <strong>Add camera</strong> (the dashed card at the end of the list).</li>
         <li>Fill in the camera details — see <a href="#camera-fields">Camera fields explained</a> below.</li>
-        <li>Click <strong>Test Connection</strong> to verify the RTSP stream is reachable before saving.</li>
-        <li>Click <strong>Save</strong>. The camera will appear in the viewer immediately.</li>
+        <li>Click <strong>Test connection</strong> to verify the RTSP stream is reachable before saving.</li>
+        <li>Click <strong>Save</strong>. The camera appears in the viewer immediately.</li>
       </ol>
-      <div class="tip"><strong>Tip:</strong> Make sure your camera is on the same local network as your PC and that RTSP is enabled in the camera's own settings.</div>
+      <div class="tip"><strong>Tip:</strong> Make sure your camera is on the same local network as your PC and that RTSP streaming is enabled in the camera's own settings.</div>
     </div>
 
     <!-- ── Camera Setup ── -->
@@ -175,145 +292,344 @@
       <h2>Camera fields explained</h2>
       <table class="field-table">
         <tr><th>Field</th><th>Description</th></tr>
-        <tr><td>Name</td><td>Display label shown on the camera tile in the viewer.</td></tr>
-        <tr><td>Brand</td><td>Choose <strong>Reolink</strong>, <strong>Dahua</strong>, or <strong>ONVIF</strong>. This controls how PTZ commands are sent.</td></tr>
-        <tr><td>IP Address</td><td>The local IP address of the camera or NVR (e.g. <code>192.168.0.100</code>).</td></tr>
-        <tr><td>Username</td><td>Camera login username — usually <code>admin</code>.</td></tr>
-        <tr><td>Password</td><td>Camera login password.</td></tr>
-        <tr><td>Channel</td><td>For NVRs with multiple cameras, the zero-based channel number (0 = first camera, 1 = second, etc.). Single cameras use 0.</td></tr>
-        <tr><td>Stream</td><td>Default stream quality: <strong>Main</strong> (high resolution) or <strong>Sub</strong> (lower resolution, lower bandwidth). Can be toggled live from the viewer.</td></tr>
-        <tr><td>PTZ</td><td>Enable PTZ controls (click-to-centre, joystick, presets) for this camera. Disable for fixed cameras.</td></tr>
-        <tr><td>Enabled</td><td>When disabled, the camera is hidden from the viewer and its stream is not started.</td></tr>
+        <tr><td>Display name</td><td>The label shown on the camera tile in the viewer.</td></tr>
+        <tr><td>Camera ID</td><td>A unique internal identifier using letters, numbers and underscores. Auto-filled from the name. Used in URLs — keep it short and simple.</td></tr>
+        <tr><td>Page / Group</td><td>Optional. Assigns this camera to a named page in the viewer. Cameras on the same page are shown together. See <a href="#pages-groups">Pages &amp; groups</a>.</td></tr>
+        <tr><td>Fill frame</td><td>Forces the video to fill the tile by cropping the edges rather than letterboxing. Useful for portrait or non-16:9 cameras such as doorbells. See <a href="#crop-mode">Fill frame</a>.</td></tr>
+        <tr><td>Brand / Protocol</td><td>Controls which PTZ command protocol is used. <strong>Reolink</strong> uses the native Reolink HTTP API. <strong>Dahua</strong> uses ONVIF with CGI absolute positioning. <strong>ONVIF</strong> uses standard ONVIF ContinuousMove.</td></tr>
+        <tr><td>IP address</td><td>The local network IP of the camera or NVR (e.g. <code>192.168.0.100</code>).</td></tr>
+        <tr><td>Management port</td><td>The HTTP port used for the PTZ API. Default is 443 for Reolink, 80 or 443 for Dahua. This is <em>not</em> the RTSP port (554).</td></tr>
+        <tr><td>Username / Password</td><td>Camera login credentials — usually <code>admin</code> / your camera password.</td></tr>
+        <tr><td>Channel</td><td>For NVRs with multiple cameras: the camera index. Reolink: 0-based (first camera = 0). Dahua: 1-based (first camera = 1). Single cameras use 0 (Reolink) or 1 (Dahua).</td></tr>
+        <tr><td>Stream quality</td><td><strong>Sub</strong> — reduced resolution, lower bandwidth. <strong>Main</strong> — full resolution. Sub is recommended when viewing 4 or more cameras simultaneously.</td></tr>
+        <tr><td>PTZ enabled</td><td>Enables PTZ controls (click-to-centre, joystick, zoom, presets) for this camera. Leave unchecked for fixed cameras.</td></tr>
       </table>
+
+      <h3>PTZ-specific fields</h3>
+      <table class="field-table">
+        <tr><th>Field</th><th>Description</th></tr>
+        <tr><td>Horizontal FoV (°)</td><td>Camera's horizontal field of view in degrees. Used to calculate pan distance for click-to-centre. Check your camera's datasheet — typical values range from 60° to 100°.</td></tr>
+        <tr><td>Vertical FoV (°)</td><td>Camera's vertical field of view in degrees. Used to calculate tilt distance. Typical values: 40–70°.</td></tr>
+        <tr><td>PTZ speed (1–63)</td><td>Motor speed for pan and tilt commands. Higher values move faster. For ONVIF cameras this is normalised to a 0–1 velocity internally.</td></tr>
+        <tr><td>Zoom speed (1–63)</td><td>Optical zoom motor speed. Applies to both scroll-wheel zoom and right-button+scroll zoom.</td></tr>
+        <tr><td>Zoom step duration (s)</td><td>How long each zoom action runs the motor. Increase if the zoom moves too little per scroll tick.</td></tr>
+        <tr><td>Camera rotation speed (°/s)</td><td>Approximate pan/tilt degrees per second at the configured PTZ speed. Used to calculate timed move duration for click-to-centre. Tune this if the camera consistently under- or over-shoots.</td></tr>
+        <tr><td>Monitor preset ID</td><td>A preset the camera returns to after PTZ inactivity. The preset must already be defined on the camera. Leave blank to disable.</td></tr>
+        <tr><td>Invert pan / Invert tilt</td><td>Reverses the pan or tilt direction. Use if the camera moves in the wrong direction when you click or drag.</td></tr>
+      </table>
+    </div>
+
+    <div class="section" id="pages-groups">
+      <h2>Pages &amp; groups</h2>
+      <p>The <strong>Page / Group</strong> field assigns a camera to a named group. All cameras in the same group are shown together when you navigate to that group in the viewer.</p>
+      <p>In the camera add/edit form, the Page field is a dropdown showing all existing page names. Select an existing page to add the camera to it, or choose <strong>+ New page…</strong> and type a new name.</p>
+      <p>When at least one camera has a page assigned, the viewer header shows a <strong>dropdown selector</strong> listing all group names — click it to jump directly to any group. Within a group, if there are more cameras than the current layout can show, <strong>‹ ›</strong> pagination arrows appear alongside the dropdown.</p>
+      <p>Cameras with no page assigned are shown together on the default (unnamed) group.</p>
+      <div class="tip"><strong>Example:</strong> Create groups named "Indoor", "Outdoor", and "Garden" to organise 12 cameras across three views, each showing a 2×2 grid.</div>
+    </div>
+
+    <div class="section" id="crop-mode">
+      <h2>Fill frame (crop mode)</h2>
+      <p>By default, camera feeds are letterboxed — the full video is visible with bars on the sides or top if the aspect ratio does not match the tile.</p>
+      <p>Enabling <strong>Fill frame</strong> for a camera forces the video to expand and fill the entire tile, cropping the edges instead of letterboxing. This is most useful for:</p>
+      <ul>
+        <li>Doorbell cameras that output a portrait or 4:3 image.</li>
+        <li>Any camera where black bars look unsightly in the grid.</li>
+      </ul>
+      <p>Enable it via Settings → edit the camera → <strong>Fill frame (crop to fit)</strong> checkbox. Cameras with crop mode active show a purple <strong>Crop</strong> badge in the camera list.</p>
     </div>
 
     <div class="section" id="reolink">
       <h2>Reolink cameras</h2>
-      <p>Reolink cameras use the native Reolink HTTP API for PTZ commands. Set <strong>Brand</strong> to <strong>Reolink</strong>.</p>
-      <h3>RTSP stream URLs</h3>
-      <p>PTZLite builds the RTSP URL automatically using the format:</p>
+      <p>Reolink cameras use the native Reolink HTTP API for PTZ commands and token-based authentication. Set <strong>Brand</strong> to <strong>Reolink</strong>.</p>
+      <h3>RTSP URL format</h3>
       <p><code>rtsp://username:password@ip:554/h264Preview_01_main</code></p>
-      <p>The channel number is added to the stream name (channel 0 = <code>_01_</code>, channel 1 = <code>_02_</code>, etc.).</p>
+      <p>The channel number is embedded in the stream name: channel 0 = <code>_01_</code>, channel 1 = <code>_02_</code>, and so on.</p>
       <h3>Requirements</h3>
       <ul>
         <li>RTSP must be enabled in the camera's Network settings.</li>
         <li>The camera must be on the same subnet as your PC.</li>
-        <li>Default RTSP port is 554 — do not change unless your camera uses a custom port.</li>
+        <li>RTSP port is 554. Management port for PTZ defaults to 443.</li>
       </ul>
     </div>
 
     <div class="section" id="reolink-hub">
       <h2>Reolink Home Hub Pro</h2>
-      <p>The Hub Pro is an NVR that connects cameras wirelessly. Each physical camera appears as a separate channel. Add one entry in PTZLite per camera channel.</p>
+      <p>The Hub Pro is a wireless NVR. Each physical camera is a separate channel — add one PTZLite entry per camera channel.</p>
       <h3>Setup</h3>
       <ul>
-        <li>Set <strong>IP</strong> to the Hub Pro's IP address (not the individual camera's IP — cameras are wireless and have no direct IP).</li>
-        <li>Set <strong>Channel</strong> to the camera's channel number as shown in the Reolink app (0-based: first camera = 0, second = 1, etc.).</li>
-        <li>Use the same admin username and password as the Hub Pro itself.</li>
+        <li>Set <strong>IP</strong> to the Hub Pro's IP address (individual cameras are wireless and have no direct IP).</li>
+        <li>Set <strong>Channel</strong> to the camera index shown in the Reolink app (0-based: first camera = 0).</li>
+        <li>Use the Hub Pro's admin username and password.</li>
       </ul>
       <h3>Recommended stream setting</h3>
-      <p>Use <strong>Sub</strong> stream for Hub Pro cameras. The main stream uses H.265 which some browsers cannot decode. The sub stream uses H.264 and plays reliably in all browsers.</p>
+      <p>Use <strong>Sub</strong> stream for Hub Pro cameras. The main stream is H.265 which some browsers cannot decode natively. The sub stream uses H.264 and plays reliably in all browsers.</p>
       <div class="tip"><strong>Tip:</strong> If you see a black screen or buffering on a Hub Pro camera, switch to Sub stream using the Main/Sub buttons in the header.</div>
     </div>
 
     <div class="section" id="dahua">
       <h2>Dahua cameras</h2>
       <p>Dahua cameras use a different RTSP URL format and the CGI API for PTZ. Set <strong>Brand</strong> to <strong>Dahua</strong>.</p>
-      <p>PTZLite uses absolute position PTZ control for Dahua cameras, mirroring the behaviour of SmartPSS. Click-to-centre calculates the target pan/tilt from the current position and moves directly to it.</p>
-      <h3>RTSP URL format used</h3>
-      <p><code>rtsp://username:password@ip:554/cam/realmonitor?channel=1&subtype=0</code></p>
-      <p><code>subtype=0</code> is main stream, <code>subtype=1</code> is sub stream.</p>
+      <p>PTZLite uses <strong>absolute position PTZ</strong> for Dahua — the same approach as SmartPSS Lite. Click-to-centre reads the camera's current pan/tilt angle, calculates the exact target, and moves there in a single command. No timed movement estimation is needed.</p>
+      <h3>RTSP URL format</h3>
+      <p><code>rtsp://username:password@ip:554/cam/realmonitor?channel=1&amp;subtype=0</code></p>
+      <p><code>subtype=0</code> = main stream, <code>subtype=1</code> = sub stream. Channel is 1-based for Dahua.</p>
+      <h3>Notes</h3>
+      <ul>
+        <li>Set <strong>Channel</strong> to 1 for the first camera (Dahua is 1-based, unlike Reolink).</li>
+        <li>Management port is typically 80 for older devices and 443 for newer ones.</li>
+      </ul>
     </div>
 
     <div class="section" id="onvif">
       <h2>Other ONVIF cameras</h2>
-      <p>Any ONVIF-compatible camera can be added for live streaming. Set <strong>Brand</strong> to <strong>ONVIF</strong>.</p>
-      <p>PTZ support for ONVIF cameras uses the standard ONVIF ContinuousMove and RelativeMove commands. Results vary by camera — not all cameras implement the full ONVIF PTZ profile.</p>
-      <div class="warn"><strong>Note:</strong> Click-to-centre accuracy depends on the camera reporting its current position via ONVIF. Cameras that do not expose position feedback will use timed movement estimates which are less precise.</div>
+      <p>Any ONVIF-compatible camera can be added for live streaming alongside Reolink and Dahua cameras. Set <strong>Brand</strong> to <strong>ONVIF</strong>.</p>
+      <p>PTZ support uses the ONVIF <strong>ContinuousMove</strong> command for joystick control and <strong>timed movement</strong> for click-to-centre. Results vary by camera — not all cameras implement the full ONVIF PTZ profile.</p>
+      <div class="warn"><strong>Note:</strong> Click-to-centre accuracy for ONVIF cameras depends on the <strong>Camera rotation speed (°/s)</strong> setting being correctly tuned. Cameras that do not report their position via ONVIF use timed movement estimates which may under- or over-shoot until the speed value is calibrated.</div>
+    </div>
+
+    <div class="section" id="manage-cameras">
+      <h2>Managing cameras</h2>
+      <h3>Reordering</h3>
+      <p>Drag camera cards in the Settings list to reorder them. The order here determines the order cameras appear in the viewer grid. Changes take effect immediately.</p>
+      <h3>Enabling and disabling</h3>
+      <p>Each camera card has a toggle switch. Disabling a camera hides it from the viewer and stops its RTSP stream — useful for cameras that are temporarily offline. All settings are preserved.</p>
+      <h3>Export and import</h3>
+      <p>Use the <strong>Export JSON</strong> button to download all camera configurations as a JSON file. Use <strong>Import JSON</strong> to restore from a backup or migrate to another PC. Importing replaces your entire current camera list.</p>
+      <h3>Network scan</h3>
+      <p>Click <strong>Scan network</strong> to discover ONVIF-compatible devices on your local network using WS-Discovery. Discovered devices appear below the camera list — click one to pre-fill the add-camera form with its IP address and model name.</p>
     </div>
 
     <!-- ── Live Viewing ── -->
     <div class="section" id="layouts">
       <h2>Grid layouts</h2>
-      <p>Use the layout buttons in the header to choose how many cameras are shown at once:</p>
+      <p>Use the layout buttons in the header to choose how many cameras are visible at once:</p>
       <table class="field-table">
         <tr><th>Layout</th><th>Cameras shown</th><th>Best for</th></tr>
-        <tr><td>1×1</td><td>1</td><td>Single camera focus or fullscreen monitoring</td></tr>
+        <tr><td>1×1</td><td>1</td><td>Single camera focus, fullscreen monitoring</td></tr>
         <tr><td>2×1</td><td>2</td><td>Side-by-side comparison of two cameras</td></tr>
         <tr><td>2×2</td><td>4</td><td>Standard 4-camera overview</td></tr>
         <tr><td>3×2</td><td>6</td><td>Medium installations</td></tr>
         <tr><td>3×3</td><td>9</td><td>Larger installations</td></tr>
         <tr><td>4×4</td><td>16</td><td>Large sites with many cameras</td></tr>
       </table>
-      <p>If you have more cameras than fit in the current layout, pagination arrows appear automatically — use them to move between pages.</p>
       <p>When you first open the viewer, PTZLite automatically selects the best layout for your number of cameras.</p>
+      <h3>Fullscreen grid</h3>
+      <p>Click the <strong>⛶ fullscreen</strong> icon in the header to expand the entire camera grid to fill the browser window, hiding the header bar. This is useful for wall-mounted monitoring displays. Press <strong>Esc</strong> or click the icon again to exit.</p>
     </div>
 
     <div class="section" id="streams">
       <h2>Main vs Sub stream</h2>
-      <p>The <strong>Main</strong> and <strong>Sub</strong> buttons in the header switch all cameras between their high-resolution and low-resolution streams.</p>
+      <p>The <strong>Main</strong> and <strong>Sub</strong> buttons in the header switch all cameras simultaneously between their full and reduced resolution streams.</p>
       <ul>
-        <li><strong>Main stream</strong> — full resolution (e.g. 4K or 5MP). Higher bandwidth, may stutter on slower networks or with many cameras.</li>
-        <li><strong>Sub stream</strong> — reduced resolution (typically 720p). Lower bandwidth, smoother with many cameras.</li>
+        <li><strong>Main stream</strong> — full resolution (e.g. 4K or 5MP). Higher bandwidth and CPU.</li>
+        <li><strong>Sub stream</strong> — reduced resolution (typically 720p). Lower bandwidth, smoother with many cameras simultaneously.</li>
       </ul>
-      <p>Switching streams reconnects all video feeds — expect a brief pause while streams restart.</p>
-      <div class="tip"><strong>Tip:</strong> If you are viewing 9 or 16 cameras simultaneously, Sub stream will give significantly smoother playback.</div>
+      <p>Switching streams briefly reconnects all video feeds. The per-camera stream quality set in Settings is the startup default; the Main/Sub buttons override it globally for the current session.</p>
+      <div class="tip"><strong>Tip:</strong> With 9 or 16 cameras, Sub stream gives significantly smoother playback and lower CPU usage.</div>
     </div>
 
     <div class="section" id="fullscreen">
-      <h2>Fullscreen</h2>
-      <p>Hover over any camera tile to reveal a fullscreen button in the top-right corner of that tile. Click it to expand that camera to fill the screen.</p>
-      <p>Press <strong>Esc</strong> or click the button again to exit fullscreen.</p>
+      <h2>Fullscreen (single camera)</h2>
+      <p>There are three ways to go fullscreen on a single camera:</p>
+      <ul>
+        <li><strong>Double left-click</strong> anywhere on a camera tile — the camera fills the entire screen instantly.</li>
+        <li><strong>Hover over the tile</strong> and click the <strong>⛶ button</strong> that appears in the top-right corner.</li>
+      </ul>
+      <p>To exit fullscreen:</p>
+      <ul>
+        <li><strong>Double right-click</strong> anywhere on the camera tile.</li>
+        <li>Press <strong>Esc</strong>.</li>
+        <li>Click the fullscreen button again (visible while in fullscreen mode).</li>
+      </ul>
+      <p>When entering fullscreen, PTZLite automatically switches that camera to the <strong>Main stream</strong> (full resolution) regardless of the current global stream setting. When you exit fullscreen, the camera reverts to whichever stream was active before — Sub, Main, or any other setting.</p>
+      <div class="tip"><strong>Note:</strong> For PTZ cameras, the double-click is intercepted so the single-click PTZ action is slightly deferred (about 280 ms). A very fast double-click goes fullscreen without triggering PTZ movement.</div>
+    </div>
+
+    <div class="section" id="labels">
+      <h2>Camera labels</h2>
+      <p>Camera name labels are displayed on each tile by default. Click the <strong>label toggle</strong> button (eye icon) in the header to hide or show all labels. Your preference is saved across sessions.</p>
+    </div>
+
+    <div class="section" id="audio">
+      <h2>Audio control</h2>
+      <p>Each camera tile has an individual mute/unmute button in the <strong>bottom-right area</strong> of the tile (second from the right), visible when you hover over the tile. All cameras start muted by default — browsers block autoplay with sound.</p>
+      <p>Click the speaker icon to unmute a camera's audio stream. The mute state for each camera is remembered across layout changes and page navigation.</p>
+      <div class="tip"><strong>Tip:</strong> Unmute only one camera at a time to avoid overlapping audio from multiple feeds.</div>
+    </div>
+
+    <div class="section" id="snapshot">
+      <h2>Snapshot</h2>
+      <p>The <strong>snapshot button</strong> (camera icon) sits at the <strong>far bottom-right</strong> of each camera tile, visible on hover. Click it to save a still image from the current video frame as a PNG file, automatically named after the camera with a timestamp.</p>
+      <p>The file is downloaded to your browser's default downloads folder.</p>
+    </div>
+
+    <div class="section" id="digital-zoom">
+      <h2>Digital zoom</h2>
+      <p>Scroll the mouse wheel over any camera tile to zoom into the video feed. This is a client-side crop — it magnifies the existing video without controlling the camera's optical zoom.</p>
+      <ul>
+        <li><strong>Scroll up</strong> — zoom in.</li>
+        <li><strong>Scroll down</strong> — zoom out back toward 1:1.</li>
+        <li><strong>Click and drag</strong> while zoomed in — pan the zoomed view.</li>
+      </ul>
+      <p>Digital zoom is independent of optical PTZ zoom and can be used together with it. At very high magnification individual pixels become visible.</p>
+      <div class="tip"><strong>Optical zoom via scroll:</strong> On PTZ cameras, holding the <strong>right mouse button while scrolling</strong> drives the camera's physical zoom motor instead of applying digital zoom. See <a href="#optical-zoom">Optical zoom</a>.</div>
     </div>
 
     <div class="section" id="pagination">
-      <h2>Pagination</h2>
-      <p>When you have more cameras than the current layout can show, navigation arrows (<strong>‹</strong> and <strong>›</strong>) appear in the header alongside a page counter.</p>
-      <p>Click the arrows to move between pages. Each page shows a full grid of cameras.</p>
+      <h2>Pages &amp; pagination</h2>
+      <p>When you have more cameras than the current layout can show at once, navigation controls appear in the header:</p>
+      <ul>
+        <li><strong>If cameras are assigned to named groups</strong> — a <strong>dropdown selector</strong> lists all group names. Select a group to jump to it. If a group has more cameras than the layout shows, <strong>‹ ›</strong> arrows appear alongside the dropdown to page through them.</li>
+        <li><strong>If no groups are defined</strong> — <strong>‹ ›</strong> arrows and a page counter (e.g. <em>2 / 3</em>) appear to page through all cameras.</li>
+      </ul>
+      <p>On mobile, large <strong>‹ ›</strong> buttons appear in the bottom navigation bar for the same purpose.</p>
+    </div>
+
+    <div class="section" id="keep-live">
+      <h2>Keep streams live</h2>
+      <p>By default, PTZLite automatically pauses all video streams when you switch to another browser tab or minimise the window — saving bandwidth and CPU while you are away. Streams resume the moment you return to the tab.</p>
+      <p>Click the <strong>Keep Live</strong> button (Wi-Fi icon) in the header to disable this behaviour. When active (button turns blue), all streams continue playing even when the tab is in the background. This is useful if you want PTZLite to keep recording or monitoring while you work in other windows.</p>
+      <p>Your Keep Live preference is saved across sessions.</p>
     </div>
 
     <!-- ── PTZ Control ── -->
     <div class="section" id="click-to-centre">
       <h2>Click to centre</h2>
-      <p>For PTZ-enabled cameras, click anywhere on the camera image to pan and tilt so that point becomes the new centre of the frame.</p>
-      <p>A ripple animation confirms where you clicked. The camera moves and the view updates within a second or two depending on the camera's speed.</p>
-      <div class="tip"><strong>Tip:</strong> Click-to-centre works best on Reolink and Dahua cameras. ONVIF accuracy depends on the camera model.</div>
+      <p>For PTZ-enabled cameras, a single click anywhere on the video pans and tilts the camera so that the clicked point becomes the new centre of the frame.</p>
+      <p>A white ripple animation confirms the target location. The camera begins moving within a fraction of a second. The technique used depends on the camera brand:</p>
+      <ul>
+        <li><strong>Reolink:</strong> Timed open-loop movement. The click position is converted to a pan/tilt angle using the configured FoV. The camera is driven for a calculated duration based on the rotation speed setting, then stopped.</li>
+        <li><strong>Dahua:</strong> CGI absolute positioning — the same method used by SmartPSS Lite. The current pan/tilt angle is read from the camera, the target angle is calculated, and a single absolute move command is sent. This is genuinely precise in one step.</li>
+        <li><strong>ONVIF:</strong> Timed ContinuousMove. Similar to Reolink — accuracy depends on the rotation speed setting being correctly calibrated.</li>
+      </ul>
+      <div class="tip"><strong>Tuning timed moves:</strong> If the camera consistently stops short of the target, increase <strong>Camera rotation speed (°/s)</strong>. If it over-travels, decrease it. For Dahua cameras the move is exact — if it misses, check that the camera's <code>getStatus</code> CGI is responding correctly.</div>
     </div>
 
     <div class="section" id="joystick">
       <h2>Joystick drag</h2>
-      <p>Click and <strong>hold</strong> on a PTZ camera image, then drag in any direction to move the camera continuously. Release to stop.</p>
+      <p>Click and <strong>hold</strong> on a PTZ camera tile, then drag in any direction to move the camera continuously. Release the mouse button (or lift your finger on touch) to stop.</p>
       <ul>
-        <li>Drag distance from the start point controls speed — drag further for faster movement.</li>
-        <li>A ring and knob indicator appears to show the joystick position.</li>
-        <li>Release the mouse to stop the camera.</li>
+        <li>A circular ring and knob indicator appears at the point where you pressed, showing joystick displacement.</li>
+        <li>Distance from the origin controls speed — drag further from the centre point for faster movement.</li>
+        <li>The camera keeps moving as long as you hold and drag. Commands are sent every 80 ms while the joystick is active.</li>
+        <li>If you press and release without dragging more than a few pixels it is treated as a <strong>click-to-centre</strong> command rather than a joystick move.</li>
       </ul>
-      <p>If you click and release quickly (without dragging), it is treated as a click-to-centre rather than a joystick command.</p>
+      <p>After a joystick move, Dahua cameras invalidate their tracked position so the next click-to-centre will re-query the camera's current angle rather than using stale data.</p>
+    </div>
+
+    <div class="section" id="touch-ptz">
+      <h2>Touch / mobile PTZ</h2>
+      <p>All PTZ controls work on touch screens with the same gestures as mouse:</p>
+      <ul>
+        <li><strong>Tap quickly</strong> on a PTZ camera — click-to-centre.</li>
+        <li><strong>Press and drag</strong> — joystick control; lift finger to stop.</li>
+        <li><strong>Scroll / pinch</strong> — digital zoom in/out.</li>
+        <li><strong>Drag while zoomed in</strong> — pan the digital zoom view.</li>
+      </ul>
+      <p>On mobile, the layout is automatically switched to 1×1 (one camera at a time) and a bottom navigation bar replaces the header pagination controls. Use the bottom <strong>‹ ›</strong> buttons to move between cameras or groups.</p>
+    </div>
+
+    <div class="section" id="optical-zoom">
+      <h2>Optical zoom</h2>
+      <p>For PTZ cameras with a motorised zoom lens, PTZLite provides two ways to control optical zoom:</p>
+      <h3>Right mouse button + scroll wheel</h3>
+      <p>Hold down the <strong>right mouse button</strong> while scrolling the wheel over a PTZ camera tile:</p>
+      <ul>
+        <li><strong>Scroll up</strong> — zoom in (telephoto).</li>
+        <li><strong>Scroll down</strong> — zoom out (wide angle).</li>
+      </ul>
+      <p>Multiple scroll ticks are batched over 120 ms and sent as a single command with a step count, preventing a flood of individual API requests.</p>
+      <h3>Zoom speed and step duration</h3>
+      <p>Two settings in the camera configuration control zoom behaviour:</p>
+      <ul>
+        <li><strong>Zoom speed (1–63)</strong> — how fast the zoom motor runs. Higher = faster.</li>
+        <li><strong>Zoom step duration (s)</strong> — how long the motor runs per zoom action. Increase this if each tick zooms too little.</li>
+      </ul>
+      <div class="tip"><strong>Tip:</strong> Optical zoom is separate from digital zoom. You can combine both — digitally zoom in on a digitally zoomed view, then use optical zoom to bring in the real image.</div>
     </div>
 
     <div class="section" id="presets">
       <h2>Presets</h2>
-      <p>Camera presets are saved PTZ positions. If your camera has presets configured, they appear as buttons along the bottom of the camera tile.</p>
-      <p>Click a preset button to move the camera to that saved position instantly.</p>
-      <p>Presets are defined on the camera itself (via the Reolink app, SmartPSS, or the camera's web interface) and read automatically by PTZLite — you do not define them in PTZLite.</p>
+      <p>Camera presets are saved PTZ positions defined on the camera. If your camera has presets configured, up to four are shown as buttons along the bottom of the camera tile.</p>
+      <p>Click a preset button to move the camera to that saved position immediately.</p>
+      <p>Presets are defined on the camera itself (via the Reolink app, SmartPSS, or the camera's web interface) — you cannot create or rename presets from within PTZLite. PTZLite reads them automatically when the camera tile loads.</p>
+      <h3>Monitor preset</h3>
+      <p>The optional <strong>Monitor preset ID</strong> field in Settings adds a permanent <strong>Monitor</strong> button to the camera tile (styled differently from regular presets). Click it to return the camera to its defined monitoring position at any time.</p>
+      <p>After a joystick move or preset jump, Dahua cameras clear their tracked position cache so the next click-to-centre re-reads the actual camera position rather than using potentially stale data.</p>
     </div>
 
     <!-- ── App ── -->
     <div class="section" id="theme">
       <h2>Light / Dark mode</h2>
-      <p>Click the sun/moon icon in the header to switch between dark and light mode. Your preference is saved and remembered across sessions.</p>
+      <p>Click the sun/moon icon (☀) in the header to switch between dark and light mode. Your preference is saved and applied instantly across all PTZLite pages — viewer, settings, help, and login.</p>
+    </div>
+
+    <div class="section" id="security">
+      <h2>Security &amp; password</h2>
+      <p>PTZLite can be protected with a password so that only authorised users on your network can access the viewer and settings.</p>
+      <h3>Setting a password</h3>
+      <ol>
+        <li>Open <strong>Settings</strong> and scroll to the <strong>Security</strong> section.</li>
+        <li>Enter a new password in both fields and click <strong>Save password</strong>.</li>
+        <li>From this point on, anyone accessing PTZLite (on any device on your network) will be shown a login page first.</li>
+      </ol>
+      <h3>Removing the password</h3>
+      <p>Leave both password fields blank and click <strong>Save password</strong> to remove password protection entirely.</p>
+      <h3>Sessions</h3>
+      <p>After a successful login, a session cookie is stored in the browser. Sessions are invalidated if PTZLite is restarted — you will be prompted to log in again after a restart.</p>
+      <div class="tip"><strong>Tip:</strong> PTZLite only listens on <code>localhost</code> by default. If you want to access it from other devices on your network, ensure your firewall allows connections to port 8765.</div>
+    </div>
+
+    <div class="section" id="tray-hotkey">
+      <h2>System tray &amp; hotkey</h2>
+      <h3>System tray icon</h3>
+      <p>PTZLite runs as a background Windows application with no visible command window. Its icon appears in the system tray (bottom-right corner of your taskbar). Right-click the icon for these options:</p>
+      <ul>
+        <li><strong>Open Viewer</strong> — opens <code>http://localhost:8765</code> in your default browser.</li>
+        <li><strong>Settings</strong> — opens the Settings page directly.</li>
+        <li><strong>Exit</strong> — shuts down PTZLite and go2rtc completely.</li>
+      </ul>
+      <h3>Ctrl+Alt+Z global hotkey</h3>
+      <p>Pressing <strong>Ctrl+Alt+Z</strong> opens the PTZLite viewer in your browser from anywhere in Windows — even when the browser is closed or minimised. The hotkey is registered globally so it works regardless of which application has focus.</p>
+      <p>If registration fails (shown in the application log), another application on your system has already claimed that key combination.</p>
+      <div class="tip"><strong>Tip:</strong> If the browser window is already open on the PTZLite tab, the hotkey simply opens a new tab rather than focusing the existing one — this is a browser behaviour limitation.</div>
     </div>
 
     <div class="section" id="stream-health">
-      <h2>Stream health</h2>
-      <p>The small dot in the header shows the status of the go2rtc stream engine:</p>
+      <h2>Stream health &amp; reconnect</h2>
+      <p>The small dot in the viewer header shows the status of the go2rtc stream engine that handles RTSP-to-WebRTC conversion:</p>
       <ul>
-        <li><strong style="color:#22c55e">Green</strong> — stream engine running normally.</li>
-        <li><strong style="color:#ef4444">Red</strong> — stream engine offline or unresponsive.</li>
-        <li><strong>Grey</strong> — checking status.</li>
+        <li><strong style="color:#22c55e">●  Green</strong> — stream engine running normally.</li>
+        <li><strong style="color:#ef4444">●  Red</strong> — stream engine offline or not responding to API calls.</li>
+        <li><strong>●  Grey</strong> — status not yet confirmed / checking.</li>
       </ul>
-      <p>Click the dot to force a reconnect. PTZLite also checks health every 15 seconds and restarts go2rtc automatically if it goes offline.</p>
-      <p>Individual cameras show an <strong>⚠ Stream offline</strong> overlay if their specific stream stops. Click <strong>Reconnect</strong> on the overlay to restart all streams.</p>
+      <p>PTZLite checks health every 15 seconds. If go2rtc goes offline it is restarted automatically — once per 60 seconds across all open browser tabs to prevent multiple tabs triggering simultaneous restarts.</p>
+      <p>Click the dot at any time to force an immediate engine restart and reconnect all streams.</p>
+      <h3>Per-camera reconnect</h3>
+      <p>Individual cameras show a <strong>⚠ Stream offline</strong> overlay if their specific stream drops. The <strong>Reconnect</strong> button performs a smart recovery:</p>
+      <ul>
+        <li>If go2rtc is still healthy, only that camera's WebRTC connection is bounced — other cameras are unaffected.</li>
+        <li>If go2rtc itself is down, a full engine restart is performed instead.</li>
+      </ul>
+    </div>
+
+    <div class="section" id="view-log">
+      <h2>View log</h2>
+      <p>PTZLite writes a detailed application log covering startup, camera connections, PTZ commands, stream health events, and errors. To view it:</p>
+      <ol>
+        <li>Open <strong>Settings</strong>.</li>
+        <li>Click <strong>View Log</strong> in the Settings header bar.</li>
+      </ol>
+      <p>The log viewer opens as an overlay panel. Features:</p>
+      <ul>
+        <li><strong>Colour coding</strong> — errors in red, warnings in amber, info lines in grey, debug lines in the default colour.</li>
+        <li><strong>Most recent first</strong> — newest log lines appear at the top.</li>
+        <li><strong>Line count selector</strong> — choose 200, 500, 1000, or 2000 lines to display.</li>
+        <li><strong>Refresh</strong> — reloads the log from disk.</li>
+        <li><strong>Save</strong> — downloads the current log view as a <code>.log</code> file with a timestamp in the filename.</li>
+      </ul>
+      <p>The log file is written to <code>ptzlite.log</code> in the PTZLite install directory (<code>%LOCALAPPDATA%\Programs\PTZLite\</code>). This file is always available even if the log viewer cannot be reached.</p>
     </div>
 
     <div class="section" id="troubleshooting">
@@ -321,37 +637,54 @@
 
       <h3>Black screen / buffering on camera</h3>
       <ul>
-        <li>Switch to <strong>Sub stream</strong> — main stream may be H.265 which some browsers cannot decode (particularly on Reolink Hub Pro).</li>
+        <li>Switch to <strong>Sub stream</strong> — main stream may be H.265 which some browsers cannot decode (particularly Reolink Hub Pro cameras).</li>
         <li>Check the camera is online and reachable by pinging its IP from your PC.</li>
-        <li>Check that RTSP is enabled in the camera's own settings.</li>
-        <li>Click the green/red dot in the header to restart the stream engine.</li>
+        <li>Confirm RTSP streaming is enabled in the camera's own settings.</li>
+        <li>Click the stream health dot in the header to restart the stream engine.</li>
+        <li>Use the per-camera <strong>Reconnect</strong> button on the offline overlay to restart just that stream.</li>
       </ul>
 
-      <h3>PTZ click does nothing</h3>
+      <h3>PTZ click does nothing or moves the wrong way</h3>
       <ul>
-        <li>Confirm <strong>PTZ</strong> is enabled for that camera in Settings.</li>
-        <li>Check the camera's username and password are correct — PTZ uses the same credentials as streaming.</li>
-        <li>Ensure the camera is a PTZ model — fixed cameras cannot pan or tilt.</li>
+        <li>Confirm <strong>PTZ enabled</strong> is checked for that camera in Settings.</li>
+        <li>Verify the camera IP, management port, username, and password are correct.</li>
+        <li>If the camera moves in the wrong direction, enable <strong>Invert pan</strong> or <strong>Invert tilt</strong> in Settings.</li>
+        <li>If click-to-centre consistently over- or under-shoots, adjust <strong>Camera rotation speed (°/s)</strong> in Settings.</li>
       </ul>
 
       <h3>Camera added but not showing in viewer</h3>
       <ul>
-        <li>Check the camera is set to <strong>Enabled</strong> in Settings.</li>
-        <li>If you recently added the camera, the viewer may need a browser refresh (<code>F5</code>).</li>
+        <li>Check the camera is <strong>Enabled</strong> in Settings (the toggle on the camera card).</li>
+        <li>If the camera is on a named page, select that page from the group dropdown in the viewer header.</li>
+        <li>Try a browser refresh (<code>F5</code>) after adding or modifying a camera.</li>
+      </ul>
+
+      <h3>Optical zoom much slower than the camera's native app</h3>
+      <ul>
+        <li>Increase <strong>Zoom speed</strong> in Settings (up to 63).</li>
+        <li>Increase <strong>Zoom step duration</strong> so each scroll tick drives the motor for longer.</li>
+        <li>Speed 63 maps to the camera's maximum zoom velocity — if the native app appears faster it may be using a different internal protocol or UI scaling.</li>
       </ul>
 
       <h3>App doesn't open on launch</h3>
       <ul>
-        <li>Check the system tray — PTZLite may be running but the browser didn't open automatically. Right-click the tray icon and choose <strong>Open</strong>.</li>
-        <li>If the tray icon is missing, the app may have crashed on startup. Check for a <code>startup_error.log</code> file in <code>%LOCALAPPDATA%\Programs\PTZLite\</code>.</li>
-        <li>Port 8765 may be in use by another application. Check the log file for a port conflict error.</li>
+        <li>Check the system tray — PTZLite may be running but the browser didn't open automatically. Right-click the tray icon and choose <strong>Open Viewer</strong>, or press <strong>Ctrl+Alt+Z</strong>.</li>
+        <li>If the tray icon is missing, check for a <code>startup_error.log</code> in <code>%LOCALAPPDATA%\Programs\PTZLite\</code>.</li>
+        <li>Port 8765 may be in use by another application — check the log file for a port conflict error.</li>
       </ul>
 
-      <h3>Stream engine shows red / streams not loading</h3>
+      <h3>Stream engine dot stays red</h3>
       <ul>
-        <li>Click the red dot to attempt a restart.</li>
-        <li>If it stays red, check <code>ptzlite.log</code> in <code>%LOCALAPPDATA%\Programs\PTZLite\</code> for error details.</li>
-        <li>Antivirus software may be blocking go2rtc — add an exception for the PTZLite install folder.</li>
+        <li>Click the red dot to attempt a manual restart.</li>
+        <li>Open Settings → <strong>View Log</strong> and look for ERROR lines from go2rtc.</li>
+        <li>Antivirus or firewall software may be blocking go2rtc — add an exception for the PTZLite install folder.</li>
+        <li>Check that no other application is using port 1984 (go2rtc's internal API port).</li>
+      </ul>
+
+      <h3>Ctrl+Alt+Z hotkey does nothing</h3>
+      <ul>
+        <li>Open Settings → <strong>View Log</strong> and search for <code>PTZLite.hotkey</code> — the log will show whether registration succeeded or failed and the reason.</li>
+        <li>If registration failed, another application has already claimed Ctrl+Alt+Z. Use the system tray icon to open the viewer instead.</li>
       </ul>
     </div>
 
@@ -369,8 +702,8 @@
 
   // Highlight active sidebar link on scroll
   const sections = document.querySelectorAll('.section[id]');
-  const navLinks = document.querySelectorAll('nav a[href^="#"]');
-  const observer = new IntersectionObserver(entries => {
+  const navLinks  = document.querySelectorAll('nav a[href^="#"]');
+  const observer  = new IntersectionObserver(entries => {
     entries.forEach(e => {
       if (e.isIntersecting) {
         navLinks.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + e.target.id));

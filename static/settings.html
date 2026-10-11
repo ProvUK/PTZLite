@@ -6,11 +6,25 @@
   <title>Camera Setup — PTZLite</title>
   <link rel="icon" type="image/x-icon" href="/favicon.ico">
   <style>
+    :root {
+      --bg: #0d0d0d; --surface: #161616; --surface2: #222; --surface3: #111;
+      --border: #2a2a2a; --border2: #333;
+      --text: #e0e0e0; --text-muted: #666; --text-dim: #555;
+      --text-btn: #aaa; --text-label: #888; --text-check: #ccc;
+      --placeholder: #444;
+    }
+    .light {
+      --bg: #f2f4f7; --surface: #ffffff; --surface2: #e8eaed; --surface3: #f0f1f4;
+      --border: #d4d8de; --border2: #c0c5cc;
+      --text: #1a1a1a; --text-muted: #888; --text-dim: #999;
+      --text-btn: #555; --text-label: #666; --text-check: #333;
+      --placeholder: #bbb;
+    }
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     body {
-      background: #0d0d0d;
-      color: #e0e0e0;
+      background: var(--bg);
+      color: var(--text);
       font-family: system-ui, -apple-system, sans-serif;
       min-height: 100vh;
     }
@@ -20,28 +34,35 @@
       align-items: center;
       gap: 16px;
       padding: 10px 18px;
-      background: #161616;
-      border-bottom: 1px solid #2a2a2a;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
     }
     header h1 { font-size: 1rem; font-weight: 600; letter-spacing: 0.02em; }
     .back-btn {
       margin-left: auto;
       display: flex; align-items: center; gap: 6px;
-      background: #222; border: 1px solid #333; color: #aaa;
+      background: var(--surface2); border: 1px solid var(--border2); color: var(--text-btn);
       border-radius: 4px; padding: 4px 12px; font-size: 0.78rem;
       cursor: pointer; text-decoration: none;
       transition: background 0.15s, color 0.15s;
     }
     .back-btn:hover { background: #2563eb; color: #fff; border-color: #2563eb; }
+    .theme-btn {
+      display: flex; align-items: center; justify-content: center;
+      width: 30px; height: 30px;
+      background: var(--surface2); border: 1px solid var(--border2); color: var(--text-btn);
+      border-radius: 4px; cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+    .theme-btn:hover { background: #2563eb; color: #fff; border-color: #2563eb; }
 
     .page { padding: 24px; max-width: 960px; margin: 0 auto; }
 
     .section-title {
       font-size: 0.72rem; font-weight: 600; letter-spacing: 0.08em;
-      text-transform: uppercase; color: #555; margin-bottom: 14px;
+      text-transform: uppercase; color: var(--text-dim); margin-bottom: 14px;
     }
 
-    /* Camera cards */
     .cam-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
@@ -50,8 +71,8 @@
     }
 
     .cam-card {
-      background: #161616;
-      border: 1px solid #2a2a2a;
+      background: var(--surface);
+      border: 1px solid var(--border);
       border-radius: 6px;
       padding: 14px 16px;
       cursor: pointer;
@@ -62,15 +83,14 @@
     .cam-card.disabled { opacity: 0.45; }
     .cam-card-body { flex: 1; min-width: 0; }
     .cam-card-name { font-size: 0.9rem; font-weight: 600; margin-bottom: 4px; }
-    .cam-card-meta { font-size: 0.72rem; color: #666; display: flex; flex-wrap: wrap; gap: 8px; }
+    .cam-card-meta { font-size: 0.72rem; color: var(--text-muted); display: flex; flex-wrap: wrap; gap: 8px; }
     .cam-card-meta span { display: flex; align-items: center; gap: 3px; }
 
-    /* Toggle switch */
     .cam-toggle { position: relative; flex-shrink: 0; width: 36px; height: 20px; }
     .cam-toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
     .cam-toggle-track {
       position: absolute; inset: 0; border-radius: 20px;
-      background: #333; transition: background 0.2s; cursor: pointer;
+      background: var(--border2); transition: background 0.2s; cursor: pointer;
     }
     .cam-toggle input:checked + .cam-toggle-track { background: #2563eb; }
     .cam-toggle-track::after {
@@ -87,17 +107,16 @@
 
     .add-card {
       background: transparent;
-      border: 1px dashed #333;
+      border: 1px dashed var(--border2);
       border-radius: 6px;
       padding: 14px 16px;
       cursor: pointer;
       display: flex; align-items: center; justify-content: center;
-      gap: 8px; color: #555; font-size: 0.85rem;
+      gap: 8px; color: var(--text-dim); font-size: 0.85rem;
       transition: border-color 0.15s, color 0.15s;
     }
     .add-card:hover { border-color: #2563eb; color: #2563eb; }
 
-    /* Modal */
     .modal-backdrop {
       position: fixed; inset: 0;
       background: rgba(0,0,0,0.75);
@@ -109,8 +128,8 @@
     .modal-backdrop.open { opacity: 1; pointer-events: all; }
 
     .modal {
-      background: #161616;
-      border: 1px solid #333;
+      background: var(--surface);
+      border: 1px solid var(--border2);
       border-radius: 8px;
       width: min(620px, 96vw);
       max-height: 90vh;
@@ -123,24 +142,23 @@
     .modal-header {
       display: flex; align-items: center; justify-content: space-between;
       padding: 16px 20px;
-      border-bottom: 1px solid #222;
+      border-bottom: 1px solid var(--border);
     }
     .modal-header h2 { font-size: 0.95rem; font-weight: 600; }
     .modal-close {
-      background: none; border: none; color: #555; cursor: pointer;
+      background: none; border: none; color: var(--text-dim); cursor: pointer;
       font-size: 1.2rem; line-height: 1; padding: 2px 6px;
       border-radius: 3px; transition: color 0.1s;
     }
-    .modal-close:hover { color: #e0e0e0; }
+    .modal-close:hover { color: var(--text); }
 
     .modal-body { padding: 20px; }
 
-    /* Form */
     .form-section { margin-bottom: 20px; }
     .form-section-title {
       font-size: 0.68rem; font-weight: 600; letter-spacing: 0.08em;
-      text-transform: uppercase; color: #555; margin-bottom: 12px;
-      padding-bottom: 6px; border-bottom: 1px solid #222;
+      text-transform: uppercase; color: var(--text-dim); margin-bottom: 12px;
+      padding-bottom: 6px; border-bottom: 1px solid var(--border);
     }
 
     .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 10px; }
@@ -148,40 +166,37 @@
     .form-row.triple { grid-template-columns: 1fr 1fr 1fr; }
 
     .field { display: flex; flex-direction: column; gap: 5px; }
-    .field label { font-size: 0.72rem; color: #888; font-weight: 500; }
+    .field label { font-size: 0.72rem; color: var(--text-label); font-weight: 500; }
     .field input, .field select {
-      background: #111; border: 1px solid #333; color: #e0e0e0;
+      background: var(--surface3); border: 1px solid var(--border2); color: var(--text);
       border-radius: 4px; padding: 7px 10px; font-size: 0.82rem;
       outline: none; transition: border-color 0.15s;
     }
     .field input:focus, .field select:focus { border-color: #2563eb; }
     .field input[type="number"] { -moz-appearance: textfield; }
-    .field input::placeholder { color: #444; }
+    .field input::placeholder { color: var(--placeholder); }
 
-    .field-hint { font-size: 0.68rem; color: #555; margin-top: 2px; }
+    .field-hint { font-size: 0.68rem; color: var(--text-dim); margin-top: 2px; line-height: 1.5; }
 
     .pw-wrap { position: relative; }
     .pw-wrap input { width: 100%; padding-right: 36px; }
     .pw-toggle {
       position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
-      background: none; border: none; color: #555; cursor: pointer; padding: 2px;
+      background: none; border: none; color: var(--text-dim); cursor: pointer; padding: 2px;
       font-size: 0.75rem;
     }
-    .pw-toggle:hover { color: #aaa; }
+    .pw-toggle:hover { color: var(--text-btn); }
 
-    /* Checkbox row */
     .check-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-    .check-row label { font-size: 0.82rem; color: #ccc; cursor: pointer; }
+    .check-row label { font-size: 0.82rem; color: var(--text-check); cursor: pointer; }
     .check-row input[type="checkbox"] { width: 15px; height: 15px; cursor: pointer; accent-color: #2563eb; }
 
-    /* PTZ section */
     #ptz-fields { display: none; }
     #ptz-fields.visible { display: block; }
 
-    /* Modal footer */
     .modal-footer {
       display: flex; align-items: center; gap: 10px;
-      padding: 16px 20px; border-top: 1px solid #222;
+      padding: 16px 20px; border-top: 1px solid var(--border);
     }
     .btn {
       padding: 7px 18px; border-radius: 4px; font-size: 0.8rem;
@@ -190,39 +205,34 @@
     }
     .btn-primary { background: #2563eb; color: #fff; border-color: #2563eb; }
     .btn-primary:hover { background: #1d4ed8; }
-    .btn-secondary { background: #222; color: #aaa; border-color: #333; }
-    .btn-secondary:hover { background: #2a2a2a; color: #e0e0e0; }
+    .btn-secondary { background: var(--surface2); color: var(--text-btn); border-color: var(--border2); }
+    .btn-secondary:hover { background: var(--border); color: var(--text); }
     .btn-danger { background: transparent; color: #ef4444; border-color: #7f1d1d; margin-left: auto; }
     .btn-danger:hover { background: #7f1d1d; color: #fff; }
 
-    /* Scan / Discovery */
     .section-header {
       display: flex; align-items: center; justify-content: space-between;
       margin-bottom: 14px;
     }
     .section-header .section-title { margin-bottom: 0; }
-    .scan-btn {
-      display: flex; align-items: center; gap: 6px;
-      font-size: 0.75rem; padding: 5px 14px;
-    }
+    .scan-btn { display: flex; align-items: center; gap: 6px; font-size: 0.75rem; padding: 5px 14px; }
     .scan-btn:disabled { opacity: 0.5; cursor: default; }
 
-    .disc-card {
-      border-style: dashed; border-color: #2a2a2a;
-      position: relative;
-    }
+    .disc-card { border-style: dashed; border-color: var(--border); position: relative; }
     .disc-card:hover { border-color: #16a34a; border-style: solid; }
     .disc-card::after {
-      content: '+ Add';
-      position: absolute; top: 10px; right: 12px;
-      font-size: 0.68rem; color: #555;
+      content: '+ Add'; position: absolute; top: 10px; right: 12px;
+      font-size: 0.68rem; color: var(--text-dim);
     }
     .disc-card:hover::after { color: #16a34a; }
 
     #discovery-section { margin-top: 28px; }
-    .disc-empty { font-size: 0.8rem; color: #555; padding: 4px 0; }
+    .disc-empty { font-size: 0.8rem; color: var(--text-dim); padding: 4px 0; }
 
-    /* Toast */
+    .cam-card[draggable] { cursor: grab; }
+    .cam-card.dragging   { opacity: 0.4; cursor: grabbing; }
+    .cam-card.drag-over  { border-color: #2563eb; border-style: solid; }
+
     #toast {
       position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px);
       background: #1e3a5f; border: 1px solid #2563eb; color: #93c5fd;
@@ -238,17 +248,27 @@
 
 <header>
   <h1>Camera Setup</h1>
-  <a href="/api/log?lines=500" target="_blank" class="back-btn" style="margin-left:auto; margin-right:8px;">📋 View Log</a>
+  <a href="/help.html" class="back-btn" style="margin-left:auto; margin-right:8px;">Help</a>
+  <a href="/about.html" class="back-btn" style="margin-left:0; margin-right:8px;">About</a>
+  <button class="back-btn" style="margin-left:0; margin-right:8px;" onclick="openLogViewer()">📋 View Log</button>
   <a href="/" class="back-btn" style="margin-left:0;">← Back to viewer</a>
+  <button class="theme-btn" onclick="toggleTheme()" title="Toggle light/dark mode">&#9788;</button>
 </header>
 
 <div class="page">
   <div class="section-header">
     <p class="section-title">Cameras</p>
-    <button class="btn btn-secondary scan-btn" id="scan-btn" onclick="scanNetwork()">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-      Scan network
-    </button>
+    <div style="display:flex;gap:8px;align-items:center">
+      <button class="btn btn-secondary" style="font-size:0.75rem;padding:5px 12px" onclick="exportConfig()">Export JSON</button>
+      <label class="btn btn-secondary" style="font-size:0.75rem;padding:5px 12px;cursor:pointer;margin:0">
+        Import JSON
+        <input type="file" id="import-file" accept=".json" style="display:none" onchange="importConfig(this)">
+      </label>
+      <button class="btn btn-secondary scan-btn" id="scan-btn" onclick="scanNetwork()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        Scan network
+      </button>
+    </div>
   </div>
   <div class="cam-grid" id="cam-grid">
     <div class="add-card" id="add-btn">
@@ -261,6 +281,63 @@
     <p class="section-title">Discovered devices <span id="disc-count" style="color:#555;font-weight:400;text-transform:none;letter-spacing:0"></span></p>
     <div class="cam-grid" id="discovery-grid"></div>
   </div>
+
+  <div style="margin-top:28px">
+    <p class="section-title">Security</p>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:18px 20px;max-width:460px">
+      <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:16px">
+        Set a password to require sign-in before viewing cameras on the local network.
+        Leave blank to disable authentication.
+      </p>
+      <div class="field" style="margin-bottom:12px">
+        <label for="sec-pw">New password</label>
+        <input type="password" id="sec-pw" placeholder="Leave blank to disable" autocomplete="new-password">
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <button class="btn btn-primary" onclick="savePassword()">Save password</button>
+        <button class="btn btn-secondary" onclick="clearPassword()">Disable protection</button>
+        <button class="btn btn-secondary" onclick="doLogout()" id="logout-btn" style="display:none">Log out</button>
+      </div>
+      <div id="sec-status" style="font-size:0.78rem;color:var(--text-muted);margin-top:10px"></div>
+    </div>
+  </div>
+
+  <div style="margin-top:28px">
+    <p class="section-title">Window</p>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:18px 20px;max-width:460px">
+      <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:16px">
+        Open PTZLite in a dedicated app window — no address bar, tabs, or browser toolbar,
+        with its own taskbar icon. Requires Google Chrome or Microsoft Edge.
+      </p>
+      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;margin-bottom:14px">
+        <input type="checkbox" id="app-window-toggle" style="width:16px;height:16px;cursor:pointer;accent-color:#2563eb">
+        <span style="font-size:0.85rem;color:var(--text)">Launch as app window</span>
+      </label>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <button class="btn btn-primary" onclick="applyAppWindow()">Apply</button>
+      </div>
+      <div id="app-window-status" style="font-size:0.78rem;color:var(--text-muted);margin-top:10px"></div>
+    </div>
+  </div>
+
+  <div style="margin-top:28px">
+    <p class="section-title">Help &amp; About</p>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+      <a href="/help.html" class="back-btn" style="margin-left:0">Help</a>
+      <a href="/about.html" class="back-btn" style="margin-left:0">About PTZLite</a>
+    </div>
+  </div>
+</div>
+
+<!-- App-window switch overlay — shown after Apply so the user can close this window -->
+<div id="switch-overlay" style="
+  display:none; position:fixed; inset:0; z-index:9000;
+  background:var(--bg); align-items:center; justify-content:center; flex-direction:column; gap:20px;
+">
+  <img src="/main-logo.png" style="height:3.5em; opacity:0.85" alt="">
+  <p id="switch-msg" style="font-size:1.1rem; font-weight:600; color:var(--text); text-align:center; max-width:340px"></p>
+  <p style="font-size:0.85rem; color:var(--text-muted); text-align:center; max-width:320px">Click the button below or press <kbd style="background:var(--surface2);border:1px solid var(--border2);border-radius:3px;padding:1px 6px;font-size:0.8rem">Ctrl+W</kbd> to close this window.</p>
+  <button class="btn btn-primary" style="font-size:0.95rem;padding:10px 28px" onclick="window.close()">Close this window</button>
 </div>
 
 <!-- Modal -->
@@ -272,40 +349,61 @@
     </div>
     <div class="modal-body">
 
+      <!-- Identity -->
       <div class="form-section">
         <p class="form-section-title">Identity</p>
         <div class="form-row">
           <div class="field">
             <label for="f-name">Display name</label>
             <input type="text" id="f-name" placeholder="Front Door" autocomplete="off">
+            <span class="field-hint">Label shown on the camera tile in the viewer</span>
           </div>
           <div class="field">
-            <label for="f-id">ID <span style="color:#555;font-weight:400">(URL slug)</span></label>
+            <label for="f-id">Camera ID <span style="color:#555;font-weight:400">(slug)</span></label>
             <input type="text" id="f-id" placeholder="front_door" autocomplete="off">
-            <span class="field-hint">Letters, numbers and underscores only</span>
+            <span class="field-hint">Letters, numbers and underscores only — auto-filled from name</span>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="field">
+            <label for="f-page">Page / Group <span style="color:#555;font-weight:400">(optional)</span></label>
+            <select id="f-page" onchange="onPageChange()"></select>
+            <input type="text" id="f-page-new" placeholder="New page name…" autocomplete="off" style="display:none; margin-top:6px">
+            <span class="field-hint">Groups cameras onto the same viewer page. Select an existing page or create a new one.</span>
+          </div>
+          <div class="field" style="justify-content:flex-start; gap:8px; padding-top:18px">
+            <div class="check-row" style="margin:0">
+              <input type="checkbox" id="f-crop">
+              <label for="f-crop">Fill frame (crop to fit)</label>
+            </div>
+            <span class="field-hint">Forces the video to fill the tile by cropping the edges. Useful for cameras with a non-standard aspect ratio such as doorbells.</span>
           </div>
         </div>
       </div>
 
+      <!-- Connection -->
       <div class="form-section">
         <p class="form-section-title">Connection</p>
         <div class="form-row single">
           <div class="field">
-            <label for="f-brand">Camera brand</label>
+            <label for="f-brand">Camera brand / protocol</label>
             <select id="f-brand" onchange="onBrandChange()">
               <option value="reolink">Reolink</option>
               <option value="dahua">Dahua</option>
             </select>
+            <span class="field-hint">Controls the PTZ command protocol. Reolink uses the native HTTP API; Dahua uses ONVIF with CGI absolute positioning.</span>
           </div>
         </div>
         <div class="form-row">
           <div class="field">
             <label for="f-ip">IP address</label>
             <input type="text" id="f-ip" placeholder="192.168.0.100" autocomplete="off">
+            <span class="field-hint">Local network IP of the camera or NVR</span>
           </div>
           <div class="field">
-            <label for="f-port">Port</label>
+            <label for="f-port">Management port</label>
             <input type="number" id="f-port" value="443" min="1" max="65535">
+            <span class="field-hint">HTTP/HTTPS port for API and PTZ. Default 443. Not the RTSP port (554).</span>
           </div>
         </div>
         <div class="form-row">
@@ -323,6 +421,7 @@
         </div>
       </div>
 
+      <!-- Stream -->
       <div class="form-section">
         <p class="form-section-title">Stream</p>
         <div class="form-row">
@@ -332,19 +431,21 @@
             <span class="field-hint" id="f-channel-hint">0 for single cameras; NVR channel index for multi-camera</span>
           </div>
           <div class="field">
-            <label for="f-stream">Quality</label>
+            <label for="f-stream">Stream quality</label>
             <select id="f-stream">
-              <option value="sub">Sub (low bandwidth)</option>
-              <option value="main">Main (full res)</option>
+              <option value="sub">Sub (reduced resolution, lower bandwidth)</option>
+              <option value="main">Main (full resolution)</option>
             </select>
+            <span class="field-hint">Sub stream is recommended when viewing 4 or more cameras simultaneously</span>
           </div>
         </div>
       </div>
 
+      <!-- PTZ -->
       <div class="form-section">
         <div class="check-row">
           <input type="checkbox" id="f-ptz" onchange="togglePtz()">
-          <label for="f-ptz">PTZ camera (pan / tilt / zoom)</label>
+          <label for="f-ptz">PTZ camera — enable pan / tilt / zoom controls</label>
         </div>
         <div id="ptz-fields">
           <p class="form-section-title" style="margin-top:4px">PTZ settings</p>
@@ -352,36 +453,67 @@
             <div class="field">
               <label for="f-fov-h">Horizontal FoV (°)</label>
               <input type="number" id="f-fov-h" value="90" min="10" max="360">
+              <span class="field-hint">Camera's horizontal field of view. Used to calculate how far to pan on click-to-centre.</span>
             </div>
             <div class="field">
               <label for="f-fov-v">Vertical FoV (°)</label>
               <input type="number" id="f-fov-v" value="55" min="10" max="180">
+              <span class="field-hint">Camera's vertical field of view. Used to calculate tilt distance on click-to-centre.</span>
             </div>
             <div class="field">
               <label for="f-ptz-speed">PTZ speed (1–63)</label>
               <input type="number" id="f-ptz-speed" value="40" min="1" max="63">
+              <span class="field-hint">Motor speed sent to the camera for pan/tilt. For ONVIF this is normalised to a 0–1 velocity.</span>
             </div>
           </div>
           <div class="form-row triple">
             <div class="field">
               <label for="f-zoom-speed">Zoom speed (1–63)</label>
               <input type="number" id="f-zoom-speed" value="63" min="1" max="63">
+              <span class="field-hint">Zoom motor speed. Applies to both Reolink and ONVIF/Dahua cameras.</span>
             </div>
             <div class="field">
-              <label for="f-zoom-step">Zoom step (s/tick)</label>
+              <label for="f-zoom-step">Zoom step duration (s)</label>
               <input type="number" id="f-zoom-step" value="0.3" min="0.05" max="5" step="0.05">
+              <span class="field-hint">How long each scroll-click runs the zoom motor. Increase if the zoom moves too little per click.</span>
             </div>
             <div class="field">
-              <label for="f-dps">Speed (°/s)</label>
+              <label for="f-dps">Camera rotation speed (°/s)</label>
               <input type="number" id="f-dps" value="20" min="1" max="360">
-              <span class="field-hint">Used for timed moves</span>
+              <span class="field-hint">Approximate pan/tilt speed at max. Tune this if click-to-centre consistently under- or over-shoots.</span>
+            </div>
+          </div>
+          <div class="form-row triple">
+            <div class="field">
+              <label for="f-pan-dps">Pan speed (°/s)</label>
+              <input type="number" id="f-pan-dps" value="" min="1" max="360" placeholder="same as rotation">
+              <span class="field-hint">Optional override for horizontal click-to-centre timing.</span>
+            </div>
+            <div class="field">
+              <label for="f-tilt-dps">Tilt speed (°/s)</label>
+              <input type="number" id="f-tilt-dps" value="" min="1" max="360" placeholder="same as rotation">
+              <span class="field-hint">Optional override for vertical click-to-centre timing.</span>
+            </div>
+            <div class="field" style="justify-content:flex-end; padding-bottom:2px">
+              <div class="check-row" style="margin:0">
+                <input type="checkbox" id="f-legacy-ptz-aim">
+                <label for="f-legacy-ptz-aim">Use legacy linear aim</label>
+              </div>
+              <span class="field-hint">Turns off the new perspective correction for this camera.</span>
+            </div>
+          </div>
+          <div class="form-row single">
+            <div class="field">
+              <label for="f-min-move">Minimum move time (s)</label>
+              <input type="number" id="f-min-move" value="0.1" min="0" max="1" step="0.01">
+              <span class="field-hint">Lower this if high pan/tilt speed values stop making a difference. 0.1 preserves the old behaviour.</span>
             </div>
           </div>
           <div class="form-row">
             <div class="field">
               <label for="f-monitor-preset">Monitor preset ID</label>
               <input type="number" id="f-monitor-preset" placeholder="none" min="0">
-              <span class="field-hint">Preset to return to (blank = none)</span>
+              <span class="field-hint">Preset number the camera returns to after inactivity (blank = disabled). Define the preset on the camera first.</span>
             </div>
             <div class="field" style="justify-content:flex-end; gap:12px; flex-direction:row; align-items:flex-end; padding-bottom:2px">
               <div class="check-row" style="margin:0">
@@ -444,9 +576,50 @@ document.getElementById('modal').addEventListener('click', e => {
 
 function v(id) { return document.getElementById(id); }
 
+function rebuildPageSelect(currentPage) {
+  const sel = v('f-page');
+  const pages = [...new Set(
+    Object.values(cameras_cache).map(c => c.page).filter(Boolean)
+  )].sort();
+
+  sel.innerHTML = '<option value="">(no group)</option>';
+  pages.forEach(p => {
+    const opt = document.createElement('option');
+    opt.value = p;
+    opt.textContent = p;
+    sel.appendChild(opt);
+  });
+  const newOpt = document.createElement('option');
+  newOpt.value = '__new__';
+  newOpt.textContent = '+ New page…';
+  sel.appendChild(newOpt);
+
+  if (currentPage) {
+    sel.value = currentPage;
+    if (sel.value !== currentPage) {
+      // Value not in list yet — add and select it
+      const opt = document.createElement('option');
+      opt.value = currentPage;
+      opt.textContent = currentPage;
+      sel.insertBefore(opt, sel.lastElementChild);
+      sel.value = currentPage;
+    }
+  }
+  v('f-page-new').style.display = 'none';
+  v('f-page-new').value = '';
+}
+
+function onPageChange() {
+  const isNew = v('f-page').value === '__new__';
+  v('f-page-new').style.display = isNew ? '' : 'none';
+  if (!isNew) v('f-page-new').value = '';
+}
+
 function clearForm() {
   v('f-name').value = '';
   v('f-id').value = '';
+  rebuildPageSelect('');
+  v('f-crop').checked = false;
   v('f-brand').value = 'reolink';
   v('f-ip').value = '';
   v('f-port').value = '443';
@@ -461,6 +634,10 @@ function clearForm() {
   v('f-zoom-speed').value = '63';
   v('f-zoom-step').value = '0.3';
   v('f-dps').value = '20';
+  v('f-pan-dps').value = '';
+  v('f-tilt-dps').value = '';
+  v('f-legacy-ptz-aim').checked = false;
+  v('f-min-move').value = '0.1';
   v('f-monitor-preset').value = '';
   v('f-pan-invert').checked = false;
   v('f-tilt-invert').checked = false;
@@ -471,6 +648,8 @@ function clearForm() {
 function fillForm(cam) {
   v('f-name').value = cam.name ?? '';
   v('f-id').value = cam.id ?? '';
+  rebuildPageSelect(cam.page || '');
+  v('f-crop').checked = !!cam.crop;
   v('f-brand').value = cam.brand ?? 'reolink';
   v('f-ip').value = cam.ip ?? '';
   v('f-port').value = cam.port ?? 443;
@@ -485,6 +664,10 @@ function fillForm(cam) {
   v('f-zoom-speed').value = cam.zoom_speed ?? 63;
   v('f-zoom-step').value = cam.zoom_step_s ?? 0.3;
   v('f-dps').value = cam.ptz_degrees_per_second ?? 20;
+  v('f-pan-dps').value = cam.pan_degrees_per_second ?? '';
+  v('f-tilt-dps').value = cam.tilt_degrees_per_second ?? '';
+  v('f-legacy-ptz-aim').checked = !!cam.legacy_ptz_aim;
+  v('f-min-move').value = cam.ptz_min_move_s ?? 0.1;
   v('f-monitor-preset').value = cam.monitor_preset != null ? cam.monitor_preset : '';
   v('f-pan-invert').checked = !!cam.pan_invert;
   v('f-tilt-invert').checked = !!cam.tilt_invert;
@@ -495,9 +678,14 @@ function fillForm(cam) {
 function formData() {
   const ptz = v('f-ptz').checked;
   const monPreset = v('f-monitor-preset').value;
+  const pageVal = v('f-page').value === '__new__'
+    ? (v('f-page-new').value.trim() || null)
+    : (v('f-page').value || null);
   const d = {
     id:       v('f-id').value.trim(),
     name:     v('f-name').value.trim(),
+    page:     pageVal,
+    crop:     v('f-crop').checked,
     brand:    v('f-brand').value,
     ip:       v('f-ip').value.trim(),
     port:     parseInt(v('f-port').value) || 443,
@@ -514,6 +702,10 @@ function formData() {
     d.zoom_speed = parseInt(v('f-zoom-speed').value) || 63;
     d.zoom_step_s = parseFloat(v('f-zoom-step').value) || 0.3;
     d.ptz_degrees_per_second = parseFloat(v('f-dps').value) || 20;
+    d.pan_degrees_per_second = v('f-pan-dps').value !== '' ? parseFloat(v('f-pan-dps').value) : null;
+    d.tilt_degrees_per_second = v('f-tilt-dps').value !== '' ? parseFloat(v('f-tilt-dps').value) : null;
+    d.legacy_ptz_aim = v('f-legacy-ptz-aim').checked;
+    d.ptz_min_move_s = parseFloat(v('f-min-move').value) || 0;
     d.monitor_preset = monPreset !== '' ? parseInt(monPreset) : null;
     d.pan_invert  = v('f-pan-invert').checked;
     d.tilt_invert = v('f-tilt-invert').checked;
@@ -718,13 +910,16 @@ async function loadCameras() {
   cams.forEach(cam => {
     const enabled = cam.enabled !== false;
     const card = document.createElement('div');
+    card.dataset.camId = cam.id;
+    card.setAttribute('draggable', 'true');
     card.className = 'cam-card' + (enabled ? '' : ' disabled');
     const meta = [`${cam.ip}:${cam.port ?? 443}`, `ch ${cam.channel ?? 0}`, cam.stream ?? 'sub']
       .map(s => `<span>${s}</span>`).join('');
     const brandBadge = cam.brand === 'dahua' ? '<span class="badge" style="background:#f97316">Dahua</span>' : '';
+    const cropBadge = cam.crop ? '<span class="badge" style="background:#7c3aed">Crop</span>' : '';
     card.innerHTML = `
       <div class="cam-card-body">
-        <div class="cam-card-name">${cam.name}${brandBadge}${cam.ptz ? '<span class="badge">PTZ</span>' : ''}</div>
+        <div class="cam-card-name">${cam.name}${brandBadge}${cam.ptz ? '<span class="badge">PTZ</span>' : ''}${cropBadge}</div>
         <div class="cam-card-meta">${meta}</div>
       </div>
       <label class="cam-toggle" title="${enabled ? 'Disable camera' : 'Enable camera'}">
@@ -751,10 +946,251 @@ async function loadCameras() {
     });
     card.addEventListener('click', () => openEdit(cam));
     grid.insertBefore(card, addBtn);
+
+    card.addEventListener('dragstart', e => {
+      e.dataTransfer.setData('text/plain', cam.id);
+      setTimeout(() => card.classList.add('dragging'), 0);
+    });
+    card.addEventListener('dragend', () => {
+      card.classList.remove('dragging');
+      document.querySelectorAll('.cam-card.drag-over').forEach(c => c.classList.remove('drag-over'));
+    });
+    card.addEventListener('dragover', e => { e.preventDefault(); card.classList.add('drag-over'); });
+    card.addEventListener('dragleave', e => {
+      if (!card.contains(e.relatedTarget)) card.classList.remove('drag-over');
+    });
+    card.addEventListener('drop', e => {
+      e.preventDefault();
+      card.classList.remove('drag-over');
+      const dragId = e.dataTransfer.getData('text/plain');
+      if (dragId === cam.id) return;
+      const dragCard = grid.querySelector(`[data-cam-id="${dragId}"]`);
+      if (!dragCard) return;
+      grid.insertBefore(dragCard, card);
+      saveOrder();
+    });
   });
 }
 
+async function saveOrder() {
+  const grid = document.getElementById('cam-grid');
+  const ids = [...grid.querySelectorAll('.cam-card[data-cam-id]')].map(c => c.dataset.camId);
+  const r = await fetch('/api/cameras/reorder', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(ids),
+  });
+  if (!r.ok) showToast('Failed to save order', true);
+  else showToast('Order saved');
+}
+
+function exportConfig() {
+  fetch('/api/config/export').then(r => r.json()).then(data => {
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'ptzlite-cameras.json';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }).catch(() => showToast('Export failed', true));
+}
+
+async function importConfig(input) {
+  const file = input.files[0];
+  if (!file) return;
+  let data;
+  try { data = JSON.parse(await file.text()); }
+  catch { showToast('Invalid JSON file', true); input.value = ''; return; }
+  if (!confirm(`Import ${data.cameras?.length ?? 0} cameras? This replaces your current list.`)) {
+    input.value = ''; return;
+  }
+  const r = await fetch('/api/config/import', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  const result = await r.json();
+  if (!r.ok) showToast(result.detail ?? 'Import failed', true);
+  else { showToast(`Imported ${result.count} cameras`); await loadCameras(); }
+  input.value = '';
+}
+
+async function savePassword() {
+  const pw = document.getElementById('sec-pw').value.trim();
+  if (!pw) { showToast('Password is empty — use "Disable protection" to remove it', true); return; }
+  const r = await fetch('/api/config/password', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({password: pw}),
+  });
+  if (r.ok) {
+    document.getElementById('sec-pw').value = '';
+    document.getElementById('sec-status').textContent = 'Password protection is enabled.';
+    document.getElementById('logout-btn').style.display = '';
+    showToast('Password set');
+  } else { showToast('Failed to set password', true); }
+}
+
+async function clearPassword() {
+  if (!confirm('Remove password protection? Anyone on the network can access PTZLite.')) return;
+  const r = await fetch('/api/config/password', {
+    method: 'POST', headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({password: ''}),
+  });
+  if (r.ok) {
+    document.getElementById('sec-status').textContent = 'Password protection is disabled.';
+    document.getElementById('logout-btn').style.display = 'none';
+    showToast('Password protection disabled');
+  } else { showToast('Failed to update', true); }
+}
+
+async function doLogout() {
+  await fetch('/api/logout', {method: 'POST'});
+  location.href = '/login.html';
+}
+
+async function loadSecurityStatus() {
+  try {
+    const r = await fetch('/api/auth/status');
+    const d = await r.json();
+    document.getElementById('sec-status').textContent =
+      d.enabled ? 'Password protection is currently enabled.' : 'Password protection is currently disabled.';
+    document.getElementById('logout-btn').style.display = d.enabled ? '' : 'none';
+  } catch {}
+}
+
+async function loadAppWindowStatus() {
+  try {
+    const r = await fetch('/api/config/app_window');
+    const d = await r.json();
+    document.getElementById('app-window-toggle').checked = !!d.app_window;
+    document.getElementById('app-window-status').textContent =
+      d.app_window ? 'App window mode is active.' : 'Standard browser mode is active.';
+  } catch {}
+}
+
+async function applyAppWindow() {
+  const enabled  = document.getElementById('app-window-toggle').checked;
+  const statusEl = document.getElementById('app-window-status');
+  try {
+    // 1 — Save the setting
+    const saveR = await fetch('/api/config/app_window', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({enabled}),
+    });
+    if (!saveR.ok) { showToast('Failed to save setting', true); return; }
+
+    // 2 — Ask the server to open the viewer in the selected mode
+    const port  = parseInt(window.location.port) || 8765;
+    const openR = await fetch('/api/open_viewer', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({port}),
+    });
+    if (!openR.ok) { showToast('Setting saved but could not open viewer', true); return; }
+
+    statusEl.textContent = enabled ? 'App window mode is active.' : 'Standard browser mode is active.';
+
+    // 3 — Show a full-page overlay with a Close button.
+    //     window.close() called from a direct button click (user gesture) works in
+    //     Chrome app-window mode and any window opened by script.  For a plain browser
+    //     tab the user can just press Ctrl+W or click the tab ✕ themselves.
+    const overlay = document.getElementById('switch-overlay');
+    document.getElementById('switch-msg').textContent = enabled
+      ? 'PTZLite is now open in its app window.'
+      : 'PTZLite is now open in your browser.';
+    overlay.style.display = 'flex';
+
+  } catch { showToast('Failed to apply setting', true); }
+}
+
 loadCameras();
+loadSecurityStatus();
+loadAppWindowStatus();
+
+function applyTheme(light) { document.body.classList.toggle('light', light); }
+function toggleTheme() {
+  const light = !document.body.classList.contains('light');
+  localStorage.setItem('theme', light ? 'light' : 'dark');
+  applyTheme(light);
+}
+applyTheme(localStorage.getItem('theme') === 'light');
+
+// ── Log viewer ────────────────────────────────────────────────────────────────
+
+let _logText = '';
+
+async function openLogViewer() {
+  document.getElementById('log-modal').classList.add('open');
+  await refreshLog();
+}
+
+function closeLogViewer() {
+  document.getElementById('log-modal').classList.remove('open');
+}
+
+async function refreshLog() {
+  const lines = document.getElementById('log-lines-sel').value;
+  const pre   = document.getElementById('log-content');
+  pre.textContent = 'Loading…';
+  try {
+    const r = await fetch(`/api/log?lines=${lines}`);
+    _logText = await r.text();
+    _renderLog(_logText);
+  } catch (e) {
+    pre.textContent = 'Failed to load log: ' + e;
+  }
+}
+
+function _renderLog(text) {
+  const pre   = document.getElementById('log-content');
+  const lines = text.split('\n').filter(l => l.trim()).reverse(); // most recent first
+  pre.innerHTML = lines.map(line => {
+    const esc = line.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    if (/\bERROR\b/i.test(line))        return `<span style="color:#f87171">${esc}</span>`;
+    if (/\bWARN(?:ING)?\b/i.test(line)) return `<span style="color:#fbbf24">${esc}</span>`;
+    if (/\bINFO\b/i.test(line))         return `<span style="color:var(--text-muted)">${esc}</span>`;
+    return `<span>${esc}</span>`;
+  }).join('\n');
+}
+
+function saveLog() {
+  if (!_logText) return;
+  const blob = new Blob([_logText], { type: 'text/plain' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `ptzlite-${new Date().toISOString().replace(/[:.]/g,'-').slice(0,19)}.log`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeLogViewer();
+});
 </script>
+<!-- Log Viewer Modal -->
+<div class="modal-backdrop" id="log-modal" onclick="if(event.target===this)closeLogViewer()">
+  <div class="modal" style="width:min(960px,96vw);display:flex;flex-direction:column;height:85vh;max-height:85vh;overflow:hidden">
+    <div class="modal-header" style="flex-shrink:0">
+      <h2>Application Log</h2>
+      <div style="display:flex;align-items:center;gap:8px">
+        <select id="log-lines-sel" onchange="refreshLog()" style="background:var(--surface2);border:1px solid var(--border2);color:var(--text-btn);border-radius:4px;padding:3px 8px;font-size:0.75rem;outline:none;cursor:pointer">
+          <option value="200">200 lines</option>
+          <option value="500" selected>500 lines</option>
+          <option value="1000">1000 lines</option>
+          <option value="2000">2000 lines</option>
+        </select>
+        <button class="btn btn-secondary" onclick="refreshLog()" style="padding:4px 12px;font-size:0.75rem">Refresh</button>
+        <button class="btn btn-secondary" onclick="saveLog()" style="padding:4px 12px;font-size:0.75rem">Save</button>
+        <button class="modal-close" onclick="closeLogViewer()" style="margin-left:4px">&#x2715;</button>
+      </div>
+    </div>
+    <div style="flex:1;overflow-y:auto;background:var(--surface3)">
+      <pre id="log-content" style="margin:0;padding:14px 16px;font-family:'Consolas','Courier New',monospace;font-size:0.72rem;line-height:1.7;white-space:pre-wrap;word-break:break-all"></pre>
+    </div>
+  </div>
+</div>
 </body>
 </html>

@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PTZLite — Sign in</title>
+  <link rel="icon" type="image/x-icon" href="/favicon.ico">
+  <script>
+    /* Apply theme before paint to avoid flash */
+    if (localStorage.getItem('theme') === 'light') document.documentElement.classList.add('light');
+  </script>
+  <style>
+    :root {
+      --bg:      #0d0d0d;
+      --surface: #161616;
+      --border:  #2a2a2a;
+      --border2: #333;
+      --text:    #e0e0e0;
+      --muted:   #666;
+      --muted2:  #888;
+      --input:   #222;
+    }
+    html.light {
+      --bg:      #f2f4f7;
+      --surface: #ffffff;
+      --border:  #d4d8de;
+      --border2: #c0c5cc;
+      --text:    #1a1a1a;
+      --muted:   #888;
+      --muted2:  #666;
+      --input:   #e8eaed;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, sans-serif;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 36px 32px;
+      width: 100%;
+      max-width: 340px;
+    }
+    .logo {
+      display: block;
+      margin: 0 auto 20px;
+      height: 36px;
+    }
+    h1 {
+      text-align: center;
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin-bottom: 5px;
+    }
+    p.sub {
+      text-align: center;
+      font-size: 0.78rem;
+      color: var(--muted);
+      margin-bottom: 24px;
+    }
+    label {
+      display: block;
+      font-size: 0.78rem;
+      color: var(--muted2);
+      margin-bottom: 5px;
+    }
+    input[type=password] {
+      width: 100%;
+      background: var(--input);
+      border: 1px solid var(--border2);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 0.92rem;
+      padding: 9px 12px;
+      margin-bottom: 14px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    input[type=password]:focus { border-color: #2563eb; }
+    button[type=submit] {
+      width: 100%;
+      background: #2563eb;
+      border: none;
+      border-radius: 6px;
+      color: #fff;
+      font-size: 0.9rem;
+      font-weight: 500;
+      padding: 10px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    button[type=submit]:hover { background: #1d4ed8; }
+    button[type=submit]:active { background: #1e40af; }
+    #err {
+      font-size: 0.78rem;
+      color: #f87171;
+      text-align: center;
+      margin-top: 12px;
+      min-height: 18px;
+    }
+  </style>
+</head>
+<body>
+<div class="card">
+  <img src="/main-logo.png" alt="PTZLite" class="logo" onerror="this.style.display='none'">
+  <h1>Sign in</h1>
+  <p class="sub">Enter the password to access PTZLite</p>
+  <form id="form">
+    <label for="pw">Password</label>
+    <input type="password" id="pw" autocomplete="current-password" autofocus placeholder="Password">
+    <button type="submit">Sign in</button>
+  </form>
+  <p id="err"></p>
+</div>
+<script>
+  document.getElementById('form').onsubmit = async (e) => {
+    e.preventDefault();
+    const pw = document.getElementById('pw').value;
+    const err = document.getElementById('err');
+    err.textContent = '';
+    try {
+      const r = await fetch('/api/login', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({password: pw}),
+      });
+      if (r.ok) {
+        const params = new URLSearchParams(location.search);
+        location.href = params.get('next') || '/';
+      } else {
+        err.textContent = 'Wrong password — try again';
+        document.getElementById('pw').select();
+      }
+    } catch {
+      err.textContent = 'Connection error — check the server is running';
+    }
+  };
+</script>
+</body>
+</html>
