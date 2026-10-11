@@ -1,9 +1,10 @@
 #
-# Version: 1.1
+# Version: 1.2
 # Updated: 2026-10-11
 #
 # v1.0 - 2026-10-11 - RTSP URL builders and PTZ move maths
 # v1.1 - 2026-10-11 - Pre-warm mode tests
+# v1.2 - 2026-10-11 - Config load: invalid cameras preserved, retired keys stripped
 #
 import math
 
@@ -75,3 +76,36 @@ def test_prewarm_mode(app_env, cfg, expected):
 
 def test_prewarm_setting_validated(client):
     assert client.post("/api/config/prewarm", json={"mode": "bogus"}).status_code == 400
+
+
+def test_invalid_camera_is_preserved_on_save(tmp_path, monkeypatch):
+    """A camera that fails validation must not be erased from disk by a save."""
+    import yaml
+    import core.config as cc
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text(yaml.safe_dump({"cameras": [
+        {"id": "ok", "name": "OK", "ip": "1.2.3.4", "username": "a", "password": ""},
+        {"id": "broken", "name": "Missing ip and username"},
+    ]}))
+    monkeypatch.setattr(cc, "CONFIG_PATH", cfg)
+    monkeypatch.setattr(cc, "_invalid_cameras", [])
+    loaded = cc.load_config()
+    assert [c["id"] for c in loaded["cameras"]] == ["ok"]
+    monkeypatch.setattr(cc, "_config", loaded)
+    monkeypatch.setattr(cc, "cameras", {})
+    cc._save_config()
+    ids = [c["id"] for c in yaml.safe_load(cfg.read_text())["cameras"]]
+    assert ids == ["ok", "broken"]
+
+
+def test_retired_keys_stripped_on_load(tmp_path, monkeypatch):
+    import yaml
+    import core.config as cc
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text(yaml.safe_dump({"cameras": [
+        {"id": "c", "name": "C", "ip": "1.2.3.4", "username": "a", "password": "",
+         "pan_lead_s": -0.2, "legacy_ptz_aim": False}]}))
+    monkeypatch.setattr(cc, "CONFIG_PATH", cfg)
+    monkeypatch.setattr(cc, "_invalid_cameras", [])
+    cam = cc.load_config()["cameras"][0]
+    assert "pan_lead_s" not in cam and "legacy_ptz_aim" not in cam

@@ -1,12 +1,14 @@
 #
-# Version: 1.4
-# Updated: 2026-05-23
+# Version: 1.5
+# Updated: 2026-10-11
 #
 # v1.0 - 2026-05-18 - Initial extraction from ptzlite.py monolith
 # v1.1 - 2026-05-23 - Add reversible improved PTZ aim calibration fields
 # v1.2 - 2026-05-23 - Add configurable PTZ timed-move minimum duration
 # v1.3 - 2026-05-23 - Add per-axis click-to-centre calibration gains (pan_cal/tilt_cal)
 # v1.4 - 2026-05-23 - Add per-axis acceleration deadtime (pan_lead_s/tilt_lead_s) for auto-cal
+# v1.5 - 2026-10-11 - Retire lead / legacy-aim fields; strip them from config on load;
+#                     preserve cameras that fail validation instead of erasing them on save
 #
 
 import logging
@@ -42,9 +44,6 @@ class CameraConfig(BaseModel):
     tilt_degrees_per_second: Optional[float] = None
     pan_cal: float = 1.0   # empirical click-to-centre gain (1.0 = uncalibrated)
     tilt_cal: float = 1.0
-    pan_lead_s: float = 0.0   # motor acceleration/brake deadtime added to every move
-    tilt_lead_s: float = 0.0
-    legacy_ptz_aim: bool = False
     ptz_min_move_s: float = 0.1
     fov_h: float = 90.0
     fov_v: float = 55.0
@@ -63,6 +62,15 @@ class CameraConfig(BaseModel):
     https: bool = False
 
 
+# Calibration fields from models we tried and retired (acceleration "lead",
+# legacy linear aim). Ignored by the code; stripped from config on load.
+_RETIRED_KEYS = ("pan_lead_s", "tilt_lead_s", "legacy_ptz_aim")
+
+
+# Cameras that failed validation: not used, but written back on save untouched.
+_invalid_cameras: list[dict] = []
+
+
 def load_config() -> dict:
     with open(CONFIG_PATH) as f:
         raw = yaml.safe_load(f)
@@ -74,7 +82,15 @@ def load_config() -> dict:
             CameraConfig(**cam_data)
             validated_cameras.append(cam_data)
         except ValidationError as e:
-            logger.warning("Camera config validation error (cam ignored): %s — %s", cam_data.get("id", "?"), e)
+            # Not loaded, but kept verbatim so a save never deletes it from disk.
+            _invalid_cameras.append(cam_data)
+            logger.warning("Camera config validation error (cam ignored, preserved on save): %s — %s",
+                           cam_data.get("id", "?"), e)
+
+    # Drop keys from retired features so they disappear on the next save.
+    for cam in validated_cameras:
+        for k in _RETIRED_KEYS:
+            cam.pop(k, None)
 
     raw["cameras"] = validated_cameras
     return raw
@@ -87,7 +103,8 @@ cameras: dict[str, dict] = {c["id"]: c for c in _config["cameras"]}
 
 def _save_config() -> None:
     """Write current _config to config.yaml and rebuild the cameras dict."""
+    on_disk = {**_config, "cameras": _config["cameras"] + _invalid_cameras}
     with open(CONFIG_PATH, "w") as f:
-        yaml.dump(_config, f, default_flow_style=False, allow_unicode=True)
+        yaml.dump(on_disk, f, default_flow_style=False, allow_unicode=True)
     cameras.clear()
     cameras.update({c["id"]: c for c in _config["cameras"]})

@@ -513,13 +513,6 @@
               <input type="number" id="f-tilt-dps" value="" min="1" max="360" placeholder="same as rotation">
               <span class="field-hint">Optional override for vertical click-to-centre timing.</span>
             </div>
-            <div class="field" style="justify-content:flex-end; padding-bottom:2px">
-              <div class="check-row" style="margin:0">
-                <input type="checkbox" id="f-legacy-ptz-aim">
-                <label for="f-legacy-ptz-aim">Use legacy linear aim</label>
-              </div>
-              <span class="field-hint">Turns off the new perspective correction for this camera.</span>
-            </div>
           </div>
           <div class="form-row single">
             <div class="field">
@@ -655,7 +648,6 @@ function clearForm() {
   v('f-dps').value = '20';
   v('f-pan-dps').value = '';
   v('f-tilt-dps').value = '';
-  v('f-legacy-ptz-aim').checked = false;
   v('f-min-move').value = '0.1';
   v('f-monitor-preset').value = '';
   v('f-pan-invert').checked = false;
@@ -685,7 +677,6 @@ function fillForm(cam) {
   v('f-dps').value = cam.ptz_degrees_per_second ?? 20;
   v('f-pan-dps').value = cam.pan_degrees_per_second ?? '';
   v('f-tilt-dps').value = cam.tilt_degrees_per_second ?? '';
-  v('f-legacy-ptz-aim').checked = !!cam.legacy_ptz_aim;
   v('f-min-move').value = cam.ptz_min_move_s ?? 0.1;
   v('f-monitor-preset').value = cam.monitor_preset != null ? cam.monitor_preset : '';
   v('f-pan-invert').checked = !!cam.pan_invert;
@@ -723,7 +714,6 @@ function formData() {
     d.ptz_degrees_per_second = parseFloat(v('f-dps').value) || 20;
     d.pan_degrees_per_second = v('f-pan-dps').value !== '' ? parseFloat(v('f-pan-dps').value) : null;
     d.tilt_degrees_per_second = v('f-tilt-dps').value !== '' ? parseFloat(v('f-tilt-dps').value) : null;
-    d.legacy_ptz_aim = v('f-legacy-ptz-aim').checked;
     d.ptz_min_move_s = parseFloat(v('f-min-move').value) || 0;
     d.monitor_preset = monPreset !== '' ? parseInt(monPreset) : null;
     d.pan_invert  = v('f-pan-invert').checked;

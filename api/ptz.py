@@ -1,5 +1,5 @@
 #
-# Version: 2.2
+# Version: 2.3
 # Updated: 2026-10-11
 #
 # v1.0 - 2026-05-18 - Initial extraction from ptzlite.py monolith
@@ -15,6 +15,7 @@
 # v2.0 - 2026-07-28 - Add floodlight/IR, siren, patrol, save-preset, and live detection-state endpoints
 # v2.1 - 2026-07-28 - Floodlight/IR/siren work on any Reolink camera, not just PTZ (_reolink_cam gate)
 # v2.2 - 2026-10-11 - Detection moved to api/detect.py (server-side batched poller + SSE)
+# v2.3 - 2026-10-11 - Remove dead lead / legacy-aim code paths
 #
 
 import asyncio
@@ -68,7 +69,6 @@ class RawMovePayload(BaseModel):
 class AxisCalPayload(BaseModel):
     axis: str           # "pan" | "tilt"
     dps: float          # fitted degrees-per-second (slope)
-    lead: float = 0.0   # deprecated: acceleration term no longer used by the model
 
 
 class ZoomPosPayload(BaseModel):
@@ -111,8 +111,6 @@ def _screen_delta_to_angles(cam: dict, dx: float, dy: float) -> tuple[float, flo
     """Convert normalised screen delta to pan/tilt degrees."""
     fov_h = float(cam.get("fov_h", 90))
     fov_v = float(cam.get("fov_v", 55))
-    if cam.get("legacy_ptz_aim", False):
-        return dx * fov_h / 2, -dy * fov_v / 2
 
     pan = math.degrees(math.atan(dx * math.tan(math.radians(fov_h) / 2)))
     tilt = -math.degrees(math.atan(dy * math.tan(math.radians(fov_v) / 2)))
@@ -435,11 +433,9 @@ async def ptz_set_axis_cal(cam_id: str, payload: AxisCalPayload):
 
     if payload.axis == "pan":
         cam["pan_degrees_per_second"] = round(dps, 3)
-        cam["pan_lead_s"] = 0.0
         cam["pan_cal"] = 1.0
     else:
         cam["tilt_degrees_per_second"] = round(dps, 3)
-        cam["tilt_lead_s"] = 0.0
         cam["tilt_cal"] = 1.0
 
     _save_config()
@@ -463,8 +459,6 @@ async def ptz_reset_cal(cam_id: str):
         cam.pop(k, None)
     cam["pan_cal"] = 1.0
     cam["tilt_cal"] = 1.0
-    cam["pan_lead_s"] = 0.0
-    cam["tilt_lead_s"] = 0.0
 
     _save_config()
     logger.info("Reset aim calibration for %s", cam_id)
