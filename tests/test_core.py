@@ -1,10 +1,11 @@
 #
-# Version: 1.2
+# Version: 1.3
 # Updated: 2026-10-11
 #
 # v1.0 - 2026-10-11 - RTSP URL builders and PTZ move maths
 # v1.1 - 2026-10-11 - Pre-warm mode tests
 # v1.2 - 2026-10-11 - Config load: invalid cameras preserved, retired keys stripped
+# v1.3 - 2026-10-11 - Next free preset slot; readable camera errors
 #
 import math
 
@@ -109,3 +110,27 @@ def test_retired_keys_stripped_on_load(tmp_path, monkeypatch):
     monkeypatch.setattr(cc, "_invalid_cameras", [])
     cam = cc.load_config()["cameras"][0]
     assert "pan_lead_s" not in cam and "legacy_ptz_aim" not in cam
+
+
+def test_next_free_preset_slot():
+    from api.ptz import _next_free_preset
+    slots = [{"id": 0, "enable": 1}, {"id": 1, "enable": 1}, {"id": 2, "enable": 0}, {"id": 3, "enable": 0}]
+    assert _next_free_preset(slots) == 2
+    assert _next_free_preset([{"id": 0, "enable": 1}]) is None
+
+
+def test_camera_errors_are_readable(client, monkeypatch):
+    import api.ptz
+    from services.ptz.reolink import ReolinkLoginError
+
+    async def bad_login(*a, **k):
+        raise ReolinkLoginError("Login to x failed: invalid password")
+    monkeypatch.setattr(api.ptz, "_nvr_call", bad_login)
+    r = client.post("/light/front_right/ir", json={"state": "Auto"})
+    assert r.status_code == 502 and "username/password" in r.json()["detail"]
+
+    async def timeout(*a, **k):
+        raise TimeoutError()
+    monkeypatch.setattr(api.ptz, "_nvr_call", timeout)
+    r = client.post("/light/front_right/ir", json={"state": "Auto"})
+    assert r.status_code == 504 and "didn't respond" in r.json()["detail"]

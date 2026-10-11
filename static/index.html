@@ -94,7 +94,7 @@
     }
     #nav-btns select:focus { border-color: #2563eb; }
 
-    #settings-btn, #theme-btn, #fullscreen-grid-btn, #labels-btn, #keeplive-btn {
+    #settings-btn, #theme-btn, #fullscreen-grid-btn, #labels-btn, #keeplive-btn, #chime-btn {
       display: flex; align-items: center; justify-content: center;
       width: 30px; height: 30px;
       background: var(--surface2); border: 1px solid var(--border2); border-radius: 4px;
@@ -102,8 +102,16 @@
       transition: background 0.15s, color 0.15s;
     }
     #settings-btn:hover, #theme-btn:hover,
-    #fullscreen-grid-btn:hover, #labels-btn:hover, #keeplive-btn:hover { background: #2563eb; color: #fff; border-color: #2563eb; }
-    #keeplive-btn.active { background: #2563eb; color: #fff; border-color: #2563eb; }
+    #fullscreen-grid-btn:hover, #labels-btn:hover, #keeplive-btn:hover, #chime-btn:hover { background: #2563eb; color: #fff; border-color: #2563eb; }
+    #keeplive-btn.active, #chime-btn.active { background: #2563eb; color: #fff; border-color: #2563eb; }
+    #alert-chip {
+      display: none; align-items: center; gap: 6px; max-width: 320px;
+      background: rgba(239,68,68,.92); color: #fff; border: none; border-radius: 4px;
+      font-size: 0.75rem; font-weight: 700; padding: 0 10px; height: 30px; cursor: pointer;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      animation: detect-pulse 1.2s ease-in-out infinite;
+    }
+    #alert-chip.show { display: flex; }
 
     #grid {
       flex: 1;
@@ -273,6 +281,26 @@
     }
     .ctrl-mini:hover { color: #fff; border-color: #fff; }
     .ctrl-note { color: #93a3b8; font-size: 0.7rem; }
+    .ctrl-input {
+      flex: 1; min-width: 0; background: #1f2937; color: #e6eefc;
+      border: 1px solid rgba(255,255,255,.18); border-radius: 5px;
+      font-size: 0.72rem; padding: 4px 7px;
+    }
+    .ctrl-input:focus { outline: none; border-color: #2563eb; }
+
+    /* Toasts (error / success feedback) */
+    .toast-host {
+      position: fixed; bottom: 48px; left: 50%; transform: translateX(-50%);
+      z-index: 2000; display: flex; flex-direction: column; gap: 6px;
+      align-items: center; pointer-events: none;
+    }
+    .toast {
+      background: rgba(127,29,29,.95); color: #fff; font-size: 0.8rem;
+      padding: 8px 14px; border-radius: 6px; max-width: 90vw;
+      box-shadow: 0 4px 14px rgba(0,0,0,.4); transition: opacity 0.4s;
+    }
+    .toast.ok { background: rgba(21,128,61,.95); }
+    .toast.out { opacity: 0; }
     .ctrl-seg {
       background: #374151; border: none; color: #cbd5e1;
       font-size: 0.68rem; font-weight: 600; padding: 3px 8px;
@@ -652,6 +680,10 @@
   <button id="labels-btn" title="Hide camera labels" onclick="toggleLabels()" style="display:flex;align-items:center;justify-content:center;width:30px;height:30px;background:var(--surface2);border:1px solid var(--border2);border-radius:4px;color:var(--text-btn);cursor:pointer;transition:background 0.15s,color 0.15s;">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
   </button>
+  <button id="alert-chip" title="Cameras detecting a person/vehicle — click to view" onclick="_jumpToAlert()"></button>
+  <button id="chime-btn" title="Play a chime when a camera sees a person or vehicle" onclick="toggleChime()">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+  </button>
   <button id="keeplive-btn" title="Keep streams live when tab is hidden" onclick="toggleKeepLive()">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="20" r="1" fill="currentColor"/></svg>
   </button>
@@ -866,10 +898,76 @@ function _connectDetection() {
   if (_detectSource || document.hidden) return;
   _detectSource = new EventSource('/detect/stream');
   _detectSource.onmessage = e => {
+    const prev = _detectStates;
     try { _detectStates = JSON.parse(e.data) || {}; } catch { return; }
     _applyDetection();
+    _onDetectionChange(prev, _detectStates);
   };
   // EventSource reconnects by itself after network blips.
+}
+
+// ── Alerts: chime + header chip ───────────────────────────────────────────────
+let _chimeOn = localStorage.getItem('chime') === '1';
+let _audioCtx = null;
+const _aiAlerting = s => !!(s && s.alerts && s.alerts.length);
+
+function toggleChime() {
+  _chimeOn = !_chimeOn;
+  localStorage.setItem('chime', _chimeOn ? '1' : '0');
+  _syncChimeBtn();
+  if (_chimeOn) _playChime();   // the click unlocks audio and previews the sound
+}
+
+function _syncChimeBtn() {
+  const b = document.getElementById('chime-btn');
+  if (!b) return;
+  b.classList.toggle('active', _chimeOn);
+  b.title = _chimeOn ? 'Detection chime on (click to mute)'
+                     : 'Play a chime when a camera sees a person or vehicle';
+}
+
+function _playChime() {
+  try {
+    _audioCtx = _audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const t0 = _audioCtx.currentTime;
+    [880, 1320].forEach((f, i) => {            // short two-tone "ding-dong"
+      const o = _audioCtx.createOscillator(), g = _audioCtx.createGain();
+      o.frequency.value = f; o.type = 'sine';
+      g.gain.setValueAtTime(0.0001, t0 + i * 0.18);
+      g.gain.exponentialRampToValueAtTime(0.25, t0 + i * 0.18 + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + i * 0.18 + 0.35);
+      o.connect(g).connect(_audioCtx.destination);
+      o.start(t0 + i * 0.18); o.stop(t0 + i * 0.18 + 0.4);
+    });
+  } catch { /* audio unavailable */ }
+}
+
+function _camName(id) { return (_cameras.find(c => c.id === id) || {}).name || id; }
+
+function _onDetectionChange(prev, next) {
+  const alerting = Object.keys(next).filter(id => _aiAlerting(next[id]));
+  const fresh = alerting.filter(id => !_aiAlerting(prev[id]));
+  if (fresh.length && _chimeOn) _playChime();
+  const chip = document.getElementById('alert-chip');
+  if (!chip) return;
+  chip.classList.toggle('show', alerting.length > 0);
+  chip.textContent = alerting.length ? '● ' + alerting.map(_camName).join(', ') : '';
+  chip.dataset.cam = alerting[0] || '';
+}
+
+// Click the chip: go to the page holding the first alerting camera and fullscreen it.
+function _jumpToAlert() {
+  const camId = document.getElementById('alert-chip').dataset.cam;
+  if (!camId) return;
+  if (_useNamedPages) {
+    const gi = _pageGroups.findIndex(g => g.cameras.some(c => c.id === camId));
+    if (gi >= 0) _groupIdx = gi;
+  }
+  const idx = currentCamList().findIndex(c => c.id === camId);
+  if (idx >= 0) _page = Math.floor(idx / perPage());
+  renderGrid();
+  const wrap = document.querySelector(`.cam-wrap[data-cam-id="${CSS.escape(camId)}"]`);
+  if (wrap) _enterCamFullscreen(wrap);
 }
 
 function _disconnectDetection() {
@@ -1498,10 +1596,7 @@ async function startAutoCalibration(cam, wrap) {
       const res = await _calibrateAxisAuto(camId, fov, vid, axis, state, setMsg);
       if (state.cancel || !res) break;
       if (res.error) { out.push(res.error); continue; }
-      await fetch(`/ptz/${camId}/set_axis_cal`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ axis, dps: res.dps }),
-      }).catch(() => {});
+      await _postJSON(`/ptz/${camId}/set_axis_cal`, { axis, dps: res.dps }, `Saving ${axis} calibration`);
       out.push(`${axis} ${res.dps.toFixed(1)}°/s${res.quality === 'rough' ? ' (rough)' : ''}`);
     }
   } catch (err) {
@@ -1558,6 +1653,42 @@ async function _resetCalibration(cam) {
   }
 }
 
+// ── Feedback: toasts + POST helper ─────────────────────────────────────────────
+// Toasts attach to the fullscreen element when one is active (otherwise they'd be
+// invisible behind it).
+function _toast(msg, ok = false) {
+  const parent = document.fullscreenElement || document.webkitFullscreenElement || document.body;
+  let host = parent.querySelector(':scope > .toast-host');
+  if (!host) { host = document.createElement('div'); host.className = 'toast-host'; parent.appendChild(host); }
+  const t = document.createElement('div');
+  t.className = 'toast' + (ok ? ' ok' : '');
+  t.textContent = msg;
+  host.appendChild(t);
+  setTimeout(() => t.classList.add('out'), 3800);
+  setTimeout(() => t.remove(), 4300);
+}
+
+// POST JSON; never throws. On failure shows "<what> failed: <reason>" using the
+// server's own message, and returns {ok:false}.
+async function _postJSON(url, body, what) {
+  try {
+    const res = await fetch(url, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body ?? {}),
+    });
+    let data = {};
+    try { data = await res.json(); } catch { /* non-JSON body */ }
+    if (res.ok && data.ok !== false) return { ...data, ok: true };
+    let why = data.detail || data.error;
+    if (!why) why = res.ok ? 'the camera rejected the command' : `server error ${res.status}`;
+    if (what) _toast(`${what} failed: ${typeof why === 'string' ? why : JSON.stringify(why)}`);
+    return { ...data, ok: false };
+  } catch {
+    if (what) _toast(`${what} failed: PTZLite server unreachable`);
+    return { ok: false };
+  }
+}
+
 // ── Camera controls popover: absolute zoom, auto-track, guard (Reolink) ────────
 // State is fetched lazily when the panel opens (each GET hits the NVR), so the
 // grid load isn't slowed. Unsupported features are simply omitted.
@@ -1593,10 +1724,7 @@ async function _openControls(cam, wrap) {
     val.textContent = pct() + '%';
     slider.addEventListener('input', () => { val.textContent = pct() + '%'; });
     slider.addEventListener('change', () => {
-      fetch(`/zoom/${cam.id}/pos`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pos: Number(slider.value) }),
-      }).catch(() => {});
+      _postJSON(`/zoom/${cam.id}/pos`, { pos: Number(slider.value) }, 'Zoom');
     });
     head.appendChild(lab); head.appendChild(val);
     box.appendChild(head); box.appendChild(slider);
@@ -1613,10 +1741,7 @@ async function _openControls(cam, wrap) {
     tog.addEventListener('click', async () => {
       const want = !tog.classList.contains('on');
       tog.disabled = true;
-      const r = await fetch(url, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enable: want }),
-      }).then(res => res.json()).catch(() => null);
+      const r = await _postJSON(url, { enable: want }, labelText);
       tog.disabled = false;
       const on = (r && r.ok) ? want : tog.classList.contains('on');
       tog.classList.toggle('on', on);
@@ -1643,10 +1768,7 @@ async function _openControls(cam, wrap) {
     setBtn.title = 'Save the current view as the guard position';
     setBtn.addEventListener('click', async () => {
       setBtn.disabled = true; setBtn.textContent = 'Saving…';
-      const r = await fetch(`/guard/${cam.id}`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ save_pos: true, enable: true }),
-      }).then(res => res.json()).catch(() => null);
+      const r = await _postJSON(`/guard/${cam.id}`, { save_pos: true, enable: true }, 'Guard position');
       setBtn.disabled = false;
       setBtn.textContent = (r && r.ok) ? 'Saved ✓' : 'Failed';
       if (r && r.ok) { tog.classList.add('on'); tog.textContent = 'On'; note.textContent = `Returns after ${guard.timeout}s`; }
@@ -1667,16 +1789,11 @@ async function _openControls(cam, wrap) {
     tog.textContent = light.white.on ? 'On' : 'Off';
     const slider = document.createElement('input');
     slider.type = 'range'; slider.min = 0; slider.max = 100; slider.value = light.white.bright;
-    const postWhite = (body) => fetch(`/light/${cam.id}/white`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
-    }).catch(() => {});
+    const postWhite = (body) => _postJSON(`/light/${cam.id}/white`, body, 'Floodlight');
     tog.addEventListener('click', async () => {
       const want = !tog.classList.contains('on');
       tog.disabled = true;
-      const r = await fetch(`/light/${cam.id}/white`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enable: want, bright: Number(slider.value) }),
-      }).then(res => res.json()).catch(() => null);
+      const r = await postWhite({ enable: want, bright: Number(slider.value) });
       tog.disabled = false;
       const on = (r && r.ok) ? want : tog.classList.contains('on');
       tog.classList.toggle('on', on); tog.textContent = on ? 'On' : 'Off';
@@ -1699,10 +1816,7 @@ async function _openControls(cam, wrap) {
       b.className = 'ctrl-seg' + (light.ir.state === st ? ' on' : '');
       b.textContent = st;
       b.addEventListener('click', async () => {
-        const r = await fetch(`/light/${cam.id}/ir`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ state: st }),
-        }).then(res => res.json()).catch(() => null);
+        const r = await _postJSON(`/light/${cam.id}/ir`, { state: st }, 'Night vision');
         if (r && r.ok) seg.querySelectorAll('.ctrl-seg').forEach(x => x.classList.toggle('on', x === b));
       });
       seg.appendChild(b);
@@ -1718,9 +1832,7 @@ async function _openControls(cam, wrap) {
     const btn = document.createElement('button');
     btn.className = 'ctrl-tog'; btn.textContent = 'Hold';
     btn.title = 'Hold to sound the siren';
-    const fire = (on) => fetch(`/siren/${cam.id}`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ on }),
-    }).catch(() => {});
+    const fire = (on) => _postJSON(`/siren/${cam.id}`, { on }, on ? 'Siren' : null);
     const start = e => { e.preventDefault(); btn.classList.add('on'); fire(true); };
     const stop  = () => { btn.classList.remove('on'); fire(false); };
     btn.addEventListener('mousedown', start);
@@ -1765,34 +1877,32 @@ async function _openControls(cam, wrap) {
     const pTog = document.createElement('button'); pTog.className = 'ctrl-tog'; pTog.textContent = 'Off';
     pTog.addEventListener('click', async () => {
       const want = !pTog.classList.contains('on');
-      const r = await fetch(`/patrol/${cam.id}`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ start: want }),
-      }).then(res => res.json()).catch(() => null);
+      const r = await _postJSON(`/patrol/${cam.id}`, { start: want }, 'Cruise');
       const on = (r && r.ok) ? want : pTog.classList.contains('on');
       pTog.classList.toggle('on', on); pTog.textContent = on ? 'On' : 'Off';
     });
     pRow.appendChild(pLab); pRow.appendChild(pTog);
     more.appendChild(pRow);
 
-    // Save current view as a preset
+    // Save current view as a preset: name it inline; the server picks the next free slot.
     const sRow = document.createElement('div'); sRow.className = 'ctrl-row';
-    const sLab = document.createElement('label'); sLab.textContent = 'Save preset';
-    const sBtn = document.createElement('button'); sBtn.className = 'ctrl-mini'; sBtn.textContent = 'Save here';
-    sBtn.addEventListener('click', async () => {
-      const name = prompt('Preset name:', '');
-      if (name === null) return;
-      const id = parseInt(prompt('Preset slot number (0-63):', '10'), 10);
-      if (Number.isNaN(id)) return;
+    const sName = document.createElement('input');
+    sName.type = 'text'; sName.className = 'ctrl-input'; sName.maxLength = 31;
+    sName.placeholder = 'New preset name';
+    const sBtn = document.createElement('button'); sBtn.className = 'ctrl-mini'; sBtn.textContent = 'Save';
+    const savePreset = async () => {
       sBtn.disabled = true; sBtn.textContent = 'Saving…';
-      const r = await fetch(`/preset/${cam.id}/save`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, name }),
-      }).then(res => res.json()).catch(() => null);
-      sBtn.disabled = false; sBtn.textContent = (r && r.ok) ? 'Saved ✓' : 'Failed';
-      setTimeout(() => { sBtn.textContent = 'Save here'; }, 1500);
-    });
-    sRow.appendChild(sLab); sRow.appendChild(sBtn);
+      const r = await _postJSON(`/preset/${cam.id}/save`, { name: sName.value.trim() }, 'Save preset');
+      sBtn.disabled = false; sBtn.textContent = 'Save';
+      if (r.ok) {
+        _toast(`Saved "${r.name}" (slot ${r.id})`, true);
+        sName.value = '';
+        _loadPresetButtons(cam, wrap);
+      }
+    };
+    sBtn.addEventListener('click', savePreset);
+    sName.addEventListener('keydown', e => { e.stopPropagation(); if (e.key === 'Enter') savePreset(); });
+    sRow.appendChild(sName); sRow.appendChild(sBtn);
     more.appendChild(sRow);
 
     panel.appendChild(moreBtn);
@@ -2426,24 +2536,29 @@ function buildPresetBar(cam, wrap) {
   wrap.appendChild(bar);
 
   // ── Right: presets (loaded async, appended after the icon buttons) ──
-  async function clickPreset(btn, camId, presetId) {
+  _loadPresetButtons(cam, wrap);
+}
+
+// (Re)load the preset buttons in a card's preset bar; also called after saving one.
+function _loadPresetButtons(cam, wrap) {
+  const bar = wrap.querySelector('.preset-bar');
+  if (!bar) return;
+  async function clickPreset(btn, presetId, label) {
     btn.classList.remove('failed');
-    try {
-      const data = await fetch(`/preset/${camId}/${presetId}`, { method: 'POST' }).then(r => r.json());
-      if (data.ok) return;
-    } catch { /* fall through to fail flash */ }
+    const r = await _postJSON(`/preset/${cam.id}/${presetId}`, {}, `Preset "${label}"`);
+    if (r.ok) return;
     void btn.offsetWidth;
     btn.classList.add('failed');
     btn.addEventListener('animationend', () => btn.classList.remove('failed'), { once: true });
   }
-
   fetch(`/presets/${cam.id}`).then(r => r.json()).then(presets => {
+    bar.querySelectorAll('.preset-btn').forEach(b => b.remove());
     (presets || []).slice(0, 4).forEach(p => {
       const btn = document.createElement('button');
       btn.className = 'preset-btn';
       btn.textContent = p.name;
       btn.title = `Go to preset: ${p.name}`;
-      btn.addEventListener('click', e => { e.stopPropagation(); clickPreset(btn, cam.id, p.id); });
+      btn.addEventListener('click', e => { e.stopPropagation(); clickPreset(btn, p.id, p.name); });
       bar.appendChild(btn);
     });
     if (cam.monitor_preset != null) {
@@ -2451,7 +2566,7 @@ function buildPresetBar(cam, wrap) {
       btn.className = 'preset-btn monitor';
       btn.textContent = 'Monitor';
       btn.title = 'Return to monitor position';
-      btn.addEventListener('click', e => { e.stopPropagation(); clickPreset(btn, cam.id, cam.monitor_preset); });
+      btn.addEventListener('click', e => { e.stopPropagation(); clickPreset(btn, cam.monitor_preset, 'Monitor'); });
       bar.appendChild(btn);
     }
   }).catch(() => {});
@@ -2648,6 +2763,7 @@ async function init() {
     if (btn) { btn.title = 'Show camera labels'; btn.style.opacity = '0.5'; }
   }
 
+  _syncChimeBtn();
   _keepLive = localStorage.getItem('keepLive') === '1';
   if (_keepLive) {
     const btn = document.getElementById('keeplive-btn');

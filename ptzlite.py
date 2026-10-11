@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Version: 5.41
+# Version: 5.42
 # Updated: 2026-10-11
 # v1.0 - 2026-04-28 - Initial stable release: go2rtc streaming, PTZ click-to-centre,
 #                     sequential pan+tilt, optical zoom, presets, serialized NVR API
@@ -160,6 +160,7 @@
 # v5.40 - 2026-10-11 - Auth middleware: plain 401 for all non-page requests, redirect only page loads;
 #                      startup pre-warm moved from deprecated on_event to lifespan
 # v5.41 - 2026-10-11 - Register detection SSE router; close shared camera HTTP session on shutdown
+# v5.42 - 2026-10-11 - Readable JSON errors for camera login failures, timeouts, unreachable cameras
 """
 Reolink camera viewer with click-to-pan PTZ control.
 
@@ -183,6 +184,7 @@ import urllib.request
 import webbrowser
 from pathlib import Path
 
+import aiohttp
 import uvicorn
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, RedirectResponse
@@ -193,6 +195,7 @@ from core.paths import APP_VERSION, GO2RTC_PORT, _STATIC_DIR, _USER_DIR
 from services.browser import open_viewer
 from services.go2rtc import _launch_prewarm, start_go2rtc, stop_go2rtc
 from services.http import close_session
+from services.ptz.reolink import ReolinkLoginError
 
 # Import routers
 from api.auth import router as auth_router, is_authenticated
@@ -234,6 +237,23 @@ async def auth_middleware(request: Request, call_next):
             return RedirectResponse("/login.html")
         return JSONResponse({"detail": "Not authenticated"}, status_code=401)
     return await call_next(request)
+
+
+# Camera failures surface in the UI as readable messages instead of a bare 500.
+@app.exception_handler(ReolinkLoginError)
+async def _camera_login_error(_req: Request, exc: ReolinkLoginError):
+    return JSONResponse({"detail": "camera login failed - check its username/password"},
+                        status_code=502)
+
+
+@app.exception_handler(asyncio.TimeoutError)
+async def _camera_timeout(_req: Request, _exc: Exception):
+    return JSONResponse({"detail": "the camera didn't respond in time"}, status_code=504)
+
+
+@app.exception_handler(aiohttp.ClientError)
+async def _camera_unreachable(_req: Request, exc: Exception):
+    return JSONResponse({"detail": "couldn't reach the camera"}, status_code=502)
 
 
 app.include_router(auth_router)

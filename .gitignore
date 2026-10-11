@@ -19,3 +19,4 @@ _session_backup_*/
 browser_profile/
 *.log
 config.yaml.bak*
+.session_secret

@@ -1,8 +1,9 @@
 #
-# Version: 1.0
+# Version: 1.1
 # Updated: 2026-10-11
 #
 # v1.0 - 2026-10-11 - Auth middleware, password masking, go2rtc proxy lockdown
+# v1.1 - 2026-10-11 - Session persistence + password-change sign-out
 #
 import pytest
 from starlette.websockets import WebSocketDisconnect
@@ -129,3 +130,21 @@ def test_ws_proxy_rejects_unknown_stream(client):
         with client.websocket_connect("/go2rtc/ws?src=nosuchcam_main") as ws:
             ws.receive_text()
     assert e.value.code == 4404
+
+
+def test_password_change_signs_out_other_sessions(client, password):
+    from fastapi.testclient import TestClient
+    import ptzlite
+    other = TestClient(ptzlite.app)
+    assert other.post("/api/login", json={"password": password}).status_code == 200
+    assert client.post("/api/login", json={"password": password}).status_code == 200
+    assert client.post("/api/config/password", json={"password": "newpass"}).status_code == 200
+    assert client.get("/api/cameras").status_code == 200      # changer stays signed in
+    assert other.get("/api/cameras").status_code == 401       # everyone else is out
+
+
+def test_session_secret_persists(tmp_path, monkeypatch):
+    import api.auth as auth
+    monkeypatch.setattr(auth, "_SECRET_FILE", tmp_path / ".session_secret")
+    first = auth._load_secret()
+    assert auth._load_secret() == first      # same secret after a "restart"

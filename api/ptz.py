@@ -1,5 +1,5 @@
 #
-# Version: 2.3
+# Version: 2.4
 # Updated: 2026-10-11
 #
 # v1.0 - 2026-05-18 - Initial extraction from ptzlite.py monolith
@@ -16,6 +16,7 @@
 # v2.1 - 2026-07-28 - Floodlight/IR/siren work on any Reolink camera, not just PTZ (_reolink_cam gate)
 # v2.2 - 2026-10-11 - Detection moved to api/detect.py (server-side batched poller + SSE)
 # v2.3 - 2026-10-11 - Remove dead lead / legacy-aim code paths
+# v2.4 - 2026-10-11 - Save preset picks the next free slot when no id is given
 #
 
 import asyncio
@@ -103,7 +104,7 @@ class PatrolPayload(BaseModel):
 
 
 class SavePresetPayload(BaseModel):
-    id: int
+    id: int | None = None   # None = use the next free slot
     name: str = ""
 
 
@@ -726,12 +727,26 @@ async def save_preset(cam_id: str, payload: SavePresetPayload):
     cam, pc = _reolink_ptz(cam_id)
     if pc is None:
         raise HTTPException(400, "Presets not supported on this camera")
-    name = payload.name or f"Preset {payload.id}"
+    ch = pc.get("channel", 0)
+    preset_id = payload.id
+    if preset_id is None:
+        data = await _nvr_call(pc, "GetPtzPreset", [{"cmd": "GetPtzPreset", "action": 0,
+            "param": {"channel": ch}}], timeout=5)
+        slots = data[0].get("value", {}).get("PtzPreset", []) if data[0].get("code", -1) == 0 else []
+        preset_id = _next_free_preset(slots)
+        if preset_id is None:
+            raise HTTPException(409, "All preset slots on this camera are in use")
+    name = (payload.name or f"Preset {preset_id}")[:31]   # Reolink name limit
     resp = await _nvr_call(pc, "SetPtzPreset", [{"cmd": "SetPtzPreset", "action": 0, "param": {
-        "PtzPreset": {"channel": pc.get("channel", 0), "enable": 1,
-                      "id": int(payload.id), "name": name}}}])
+        "PtzPreset": {"channel": ch, "enable": 1, "id": int(preset_id), "name": name}}}])
     preset_cache.pop(cam_id, None)   # force preset bar to reload
-    return {"ok": resp[0].get("code", -1) == 0, "id": payload.id, "name": name}
+    return {"ok": resp[0].get("code", -1) == 0, "id": preset_id, "name": name}
+
+
+def _next_free_preset(slots: list) -> int | None:
+    """Lowest slot id the camera reports as unused (enable == 0)."""
+    free = sorted(int(p["id"]) for p in slots if not p.get("enable") and "id" in p)
+    return free[0] if free else None
 
 
 @router.get("/presets/{cam_id}")
