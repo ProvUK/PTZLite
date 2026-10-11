@@ -1,16 +1,20 @@
 #
-# Version: 1.0
-# Updated: 2026-05-18
+# Version: 1.1
+# Updated: 2026-10-11
 #
 # v1.0 - 2026-05-18 - Initial extraction from ptzlite.py monolith
+# v1.1 - 2026-10-11 - Add authenticated /go2rtc/ws proxy (go2rtc now localhost-only);
+#                     remove unused /api/webrtc proxy (requested a non-existent stream)
 #
 
 import asyncio
 import logging
+from urllib.parse import urlparse
 
 import aiohttp
-from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi import APIRouter, WebSocket
 
+from api.auth import is_authenticated
 from core.config import cameras
 from core.paths import GO2RTC_PORT
 import services.go2rtc as _go2rtc_mod
@@ -24,23 +28,74 @@ from services.go2rtc import (
 router = APIRouter()
 logger = logging.getLogger("PTZLite.api.go2rtc_api")
 
+_STREAM_KINDS = ("main", "sub", "talk")
 
-@router.post("/api/webrtc/{cam_id}")
-async def webrtc_offer(cam_id: str, request: Request):
-    if cam_id not in cameras:
-        raise HTTPException(404, "Camera not found")
-    body = await request.body()
-    async with aiohttp.ClientSession() as s:
-        async with s.post(
-            f"http://localhost:{GO2RTC_PORT}/api/webrtc?src={cam_id}",
-            data=body,
-            headers={"Content-Type": "application/sdp"},
-        ) as resp:
-            answer = await resp.text()
-            logger.info("go2rtc WebRTC %s: status=%d body_len=%d", cam_id, resp.status, len(answer))
-            if resp.status != 200:
-                logger.error("  go2rtc error body: %s", answer[:300])
-            return Response(content=answer, status_code=resp.status, media_type="application/sdp")
+
+def _allowed_stream(src: str) -> bool:
+    """Only proxy streams PTZLite itself registers: <cam_id>_main/_sub/_talk."""
+    cam_id, _, kind = src.rpartition("_")
+    return kind in _STREAM_KINDS and cam_id in cameras
+
+
+def _same_origin(ws: WebSocket) -> bool:
+    """Reject cross-site pages trying to open a stream socket on the user's behalf."""
+    origin = ws.headers.get("origin")
+    if not origin:
+        return True   # non-browser client (no Origin header)
+    return urlparse(origin).netloc == ws.headers.get("host", "")
+
+
+@router.websocket("/go2rtc/ws")
+async def go2rtc_ws_proxy(ws: WebSocket):
+    """Relay the video-rtc player's signalling / MSE socket to go2rtc.
+
+    HTTP middleware never sees WebSockets, so auth is checked here.
+    """
+    src = ws.query_params.get("src", "")
+    if not is_authenticated(ws) or not _same_origin(ws):
+        await ws.close(code=4401)
+        return
+    if not _allowed_stream(src):
+        await ws.close(code=4404)
+        return
+    await ws.accept()
+
+    upstream_url = f"ws://127.0.0.1:{GO2RTC_PORT}/api/ws?src={src}"
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.ws_connect(upstream_url, max_msg_size=0) as up:
+
+                async def client_to_go2rtc():
+                    while True:
+                        msg = await ws.receive()
+                        if msg["type"] == "websocket.disconnect":
+                            return
+                        if msg.get("text") is not None:
+                            await up.send_str(msg["text"])
+                        elif msg.get("bytes") is not None:
+                            await up.send_bytes(msg["bytes"])
+
+                async def go2rtc_to_client():
+                    async for m in up:
+                        if m.type == aiohttp.WSMsgType.TEXT:
+                            await ws.send_text(m.data)
+                        elif m.type == aiohttp.WSMsgType.BINARY:
+                            await ws.send_bytes(m.data)
+                        else:
+                            return
+
+                tasks = {asyncio.create_task(client_to_go2rtc()),
+                         asyncio.create_task(go2rtc_to_client())}
+                _, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+                for t in pending:
+                    t.cancel()
+    except Exception as e:
+        logger.info("go2rtc ws proxy %s ended: %s", src, e)
+    finally:
+        try:
+            await ws.close()
+        except Exception:
+            pass
 
 
 @router.get("/api/go2rtc/health")
@@ -54,7 +109,7 @@ async def api_go2rtc_health():
         try:
             async with aiohttp.ClientSession() as s:
                 async with s.get(
-                    f"http://localhost:{GO2RTC_PORT}/api/streams",
+                    f"http://127.0.0.1:{GO2RTC_PORT}/api/streams",
                     timeout=aiohttp.ClientTimeout(total=2),
                 ) as r:
                     if r.status == 200:

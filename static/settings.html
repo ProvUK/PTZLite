@@ -756,6 +756,7 @@ async function testCamera(silent = false) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        id:       _editId || undefined,   // lets the server swap a masked password for the stored one
         ip,
         username: v('f-username').value.trim(),
         password: v('f-password').value,

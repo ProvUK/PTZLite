@@ -1,9 +1,10 @@
 #
-# Version: 1.1
-# Updated: 2026-05-21
+# Version: 1.2
+# Updated: 2026-10-11
 #
 # v1.0 - 2026-05-18 - Initial extraction from ptzlite.py monolith
 # v1.1 - 2026-05-21 - Add GET/POST /api/config/app_window and POST /api/open_viewer
+# v1.2 - 2026-10-11 - Camera test resolves a masked password to the stored one
 #
 
 import asyncio
@@ -14,7 +15,8 @@ import traceback
 from fastapi import APIRouter, HTTPException, Request, Response
 from fastapi.responses import FileResponse
 
-from core.config import _config, _save_config
+from api.cameras import PW_MASK
+from core.config import _config, _save_config, cameras
 from core.paths import APP_VERSION, _STATIC_DIR, _USER_DIR
 from services.browser import open_viewer
 from services.discovery import _ws_discover
@@ -67,6 +69,9 @@ async def api_test_camera(request: Request):
 
     user     = data.get("username", "admin")
     password = data.get("password", "")
+    # Settings shows a masked password for saved cameras; test with the real one.
+    if password == PW_MASK and data.get("id") in cameras:
+        password = cameras[data["id"]].get("password", "")
     brand    = data.get("brand", "reolink")
     channel  = data.get("channel", 0)
     stream   = data.get("stream", "sub")

@@ -1,6 +1,6 @@
 #
-# Version: 1.3
-# Updated: 2026-05-21
+# Version: 1.5
+# Updated: 2026-10-11
 #
 # v1.0 - 2026-05-18 - Initial extraction from ptzlite.py monolith
 # v1.1 - 2026-05-20 - Fix pre-warm CPU: read first chunk only then hold via backpressure
@@ -15,6 +15,7 @@
 #                     a 3-5 s freeze + burst. Main streams started 3 s after sub to avoid
 #                     a simultaneous 12-session RTSP burst on startup.
 # v1.4 - 2026-07-28 - Register per-camera _talk stream (backchannel on) for two-way audio.
+# v1.5 - 2026-10-11 - Bind go2rtc API to 127.0.0.1 (browser goes via authenticated proxy)
 #
 
 import asyncio
@@ -45,7 +46,10 @@ def _build_go2rtc_config(streams: dict) -> dict:
     """Build the go2rtc YAML config dict from a streams mapping."""
     return {
         "streams": streams,
-        "api": {"listen": f":{GO2RTC_PORT}", "origin": "*", "static_dir": ""},
+        # API bound to localhost: browsers reach streams only via PTZLite's
+        # authenticated /go2rtc/ws proxy, never go2rtc directly (it has no auth
+        # and /api/streams would expose camera credentials).
+        "api": {"listen": f"127.0.0.1:{GO2RTC_PORT}", "static_dir": ""},
         "log": {"level": "warn"},
         "rtsp": {"listen": ""},
         "webrtc": {"ice_servers": []},
@@ -66,7 +70,7 @@ def _copy_go2rtc_js() -> None:
     static = _STATIC_DIR
     for fname in ("video-stream.js", "video-rtc.js"):
         try:
-            url = f"http://localhost:{GO2RTC_PORT}/{fname}"
+            url = f"http://127.0.0.1:{GO2RTC_PORT}/{fname}"
             with urllib.request.urlopen(url, timeout=3) as r:
                 (static / fname).write_bytes(r.read())
             logger.info("Copied %s from go2rtc to static/", fname)
@@ -87,7 +91,7 @@ async def _prewarm_stream_loop(name: str) -> None:
     Intentional go2rtc restarts cancel these tasks via _cancel_prewarm() before
     killing the process, so there is never a gap caused by a planned reconnect.
     """
-    url = f"http://localhost:{GO2RTC_PORT}/api/stream.mp4?src={name}"
+    url = f"http://127.0.0.1:{GO2RTC_PORT}/api/stream.mp4?src={name}"
     while True:
         try:
             async with aiohttp.ClientSession() as session:
@@ -175,7 +179,7 @@ def start_go2rtc() -> None:
 
     for _ in range(20):
         try:
-            urllib.request.urlopen(f"http://localhost:{GO2RTC_PORT}/api/streams", timeout=1)
+            urllib.request.urlopen(f"http://127.0.0.1:{GO2RTC_PORT}/api/streams", timeout=1)
             break
         except Exception:
             time.sleep(0.3)
@@ -229,7 +233,7 @@ def _reload_go2rtc() -> None:
 
     for _ in range(20):
         try:
-            urllib.request.urlopen(f"http://localhost:{GO2RTC_PORT}/api/streams", timeout=1)
+            urllib.request.urlopen(f"http://127.0.0.1:{GO2RTC_PORT}/api/streams", timeout=1)
             break
         except Exception:
             time.sleep(0.3)

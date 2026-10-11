@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-# Version: 5.39
-# Updated: 2026-05-21
+# Version: 5.40
+# Updated: 2026-10-11
 # v1.0 - 2026-04-28 - Initial stable release: go2rtc streaming, PTZ click-to-centre,
 #                     sequential pan+tilt, optical zoom, presets, serialized NVR API
 # v1.1 - 2026-04-28 - Add camera management API (GET/POST/PUT/DELETE /api/cameras)
@@ -157,6 +157,8 @@
 #                      use_last_error for diagnostics. Tray icon loads main-logo.png
 # v5.39 - 2026-05-21 - App window mode: launch Chrome/Edge with --app flag for a browser-chrome-free
 #                      window with its own taskbar icon; falls back to default browser if unavailable
+# v5.40 - 2026-10-11 - Auth middleware: plain 401 for all non-page requests, redirect only page loads;
+#                      startup pre-warm moved from deprecated on_event to lifespan
 """
 Reolink camera viewer with click-to-pan PTZ control.
 
@@ -199,20 +201,34 @@ from api.ptz import router as ptz_router
 
 # ── FastAPI app ────────────────────────────────────────────────────────────────
 
-app = FastAPI(title="PTZLite")
+from contextlib import asynccontextmanager
 
-_AUTH_EXEMPT = {"/login.html", "/api/login", "/api/logout", "/api/auth/status", "/favicon.ico"}
+
+@asynccontextmanager
+async def _lifespan(_app):
+    # Keep go2rtc RTSP sessions warm so streams open instantly.
+    asyncio.create_task(_launch_prewarm(delay=3.0))
+    yield
+
+
+app = FastAPI(title="PTZLite", lifespan=_lifespan)
+
+_AUTH_EXEMPT = {
+    "/login.html", "/api/login", "/api/logout", "/api/auth/status",
+    "/favicon.ico", "/main-logo.png", "/manifest.json",   # assets the login page needs
+}
 
 
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
-    if request.url.path not in _AUTH_EXEMPT and not is_authenticated(request):
-        p = request.url.path
-        if (p.startswith("/api/") or p.startswith("/ptz/") or p.startswith("/zoom/")
-                or p.startswith("/presets/") or p.startswith("/preset/")
-                or p.startswith("/cameras")):
-            return JSONResponse({"detail": "Not authenticated"}, status_code=401)
-        return RedirectResponse(f"/login.html")
+    # Deny by default. Page loads are redirected to the login page; everything
+    # else (API calls, assets, any future endpoint) gets a plain 401.
+    # NB: HTTP middleware does not see WebSockets — /go2rtc/ws checks auth itself.
+    p = request.url.path
+    if p not in _AUTH_EXEMPT and not is_authenticated(request):
+        if p == "/" or p.endswith(".html"):
+            return RedirectResponse("/login.html")
+        return JSONResponse({"detail": "Not authenticated"}, status_code=401)
     return await call_next(request)
 
 
@@ -223,11 +239,6 @@ app.include_router(go2rtc_router)
 app.include_router(misc_router)
 
 app.mount("/", StaticFiles(directory=_STATIC_DIR, html=True), name="static")
-
-
-@app.on_event("startup")
-async def _on_startup():
-    asyncio.create_task(_launch_prewarm(delay=3.0))
 
 
 # ── System tray ────────────────────────────────────────────────────────────────

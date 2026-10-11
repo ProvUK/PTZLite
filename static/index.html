@@ -715,10 +715,13 @@
 // ── Stream state ─────────────────────────────────────────────────────────────
 
 let activeStream = 'main';
-let go2rtcPort   = 1984;
+
+// Streams go through PTZLite's authenticated /go2rtc/ws proxy (same origin as
+// the page), never straight to go2rtc — which is bound to localhost only.
+function _wsBase() { return `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`; }
 
 function streamSrc(camId) {
-  return `ws://${location.hostname}:${go2rtcPort}/api/ws?src=${camId}_${activeStream}`;
+  return `${_wsBase()}/go2rtc/ws?src=${camId}_${activeStream}`;
 }
 
 function setStream(stream) {
@@ -1800,7 +1803,7 @@ function _startTalk(cam, btn) {
   el.background = true;           // stay connected while hidden
   el.style.display = 'none';
   document.body.appendChild(el);
-  el.src = `ws://${location.hostname}:${go2rtcPort}/api/ws?src=${cam.id}_talk`;
+  el.src = `${_wsBase()}/go2rtc/ws?src=${cam.id}_talk`;
   _talkEls[cam.id] = el;
   btn.classList.add('on');
   btn.textContent = '● Talking (tap to stop)';
@@ -2016,7 +2019,7 @@ function _switchVideoStream(vsEl, newSrc) {
 // Called on fullscreen entry and after each toggle click.
 function _syncFsToggle(toggle, vs) {
   const camId   = vs.dataset.camId;
-  const mainSrc = `ws://${location.hostname}:${go2rtcPort}/api/ws?src=${camId}_main`;
+  const mainSrc = `${_wsBase()}/go2rtc/ws?src=${camId}_main`;
   const onMain  = vs.wsURL === mainSrc;
   toggle.querySelector('.fs-main-btn').classList.toggle('active',  onMain);
   toggle.querySelector('.fs-sub-btn' ).classList.toggle('active', !onMain);
@@ -2268,7 +2271,7 @@ function buildCard(cam, streamDelay = 0) {
   fsMainBtn.textContent = 'Main';
   fsMainBtn.addEventListener('click', e => {
     e.stopPropagation();
-    const src = `ws://${location.hostname}:${go2rtcPort}/api/ws?src=${cam.id}_main`;
+    const src = `${_wsBase()}/go2rtc/ws?src=${cam.id}_main`;
     if (vs.wsURL === src) return;
     _switchVideoStream(vs, src);
     fsMainBtn.classList.add('active');
@@ -2280,7 +2283,7 @@ function buildCard(cam, streamDelay = 0) {
   fsSubBtn.textContent = 'Sub';
   fsSubBtn.addEventListener('click', e => {
     e.stopPropagation();
-    const src = `ws://${location.hostname}:${go2rtcPort}/api/ws?src=${cam.id}_sub`;
+    const src = `${_wsBase()}/go2rtc/ws?src=${cam.id}_sub`;
     if (vs.wsURL === src) return;
     _switchVideoStream(vs, src);
     fsSubBtn.classList.add('active');
@@ -2597,7 +2600,6 @@ async function init() {
   const cameras = await camResp.json();
   const n = cameras.length;
 
-  if (n > 0) go2rtcPort = cameras[0].go2rtc_port;
   document.getElementById('cam-count').textContent = `${n} camera${n !== 1 ? 's' : ''}`;
 
   // Build layout buttons

@@ -1,16 +1,20 @@
 #
-# Version: 1.0
-# Updated: 2026-05-19
+# Version: 1.1
+# Updated: 2026-10-11
 #
 # v1.0 - 2026-05-19 - Password protection: HMAC session cookie, enable/disable via config
+# v1.1 - 2026-10-11 - Constant-time password compare; delay failed logins; auth check
+#                     accepts any HTTP connection (WebSocket proxy uses it)
 #
 
+import asyncio
 import hmac
 import logging
 import secrets
 
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
+from starlette.requests import HTTPConnection
 
 from core.config import _config, _save_config
 
@@ -34,8 +38,9 @@ def _verify_token(token: str) -> bool:
         return False
 
 
-def is_authenticated(request: Request) -> bool:
-    """True when no password is configured, or a valid session cookie is present."""
+def is_authenticated(request: HTTPConnection) -> bool:
+    """True when no password is configured, or a valid session cookie is present.
+    Works for both HTTP requests and WebSockets (both carry cookies)."""
     if not _config.get("password"):
         return True
     token = request.cookies.get(_COOKIE_NAME)
@@ -55,7 +60,8 @@ async def api_login(request: Request):
     data = await request.json()
     pw = data.get("password", "")
     configured = _config.get("password", "")
-    if not configured or pw != configured:
+    if not configured or not hmac.compare_digest(str(pw).encode(), configured.encode()):
+        await asyncio.sleep(1.0)   # slow down password guessing
         return JSONResponse({"ok": False, "error": "Wrong password"}, status_code=401)
     resp = JSONResponse({"ok": True})
     resp.set_cookie(

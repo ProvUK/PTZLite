@@ -1,8 +1,10 @@
 #
-# Version: 1.0
-# Updated: 2026-05-18
+# Version: 1.1
+# Updated: 2026-10-11
 #
 # v1.0 - 2026-05-18 - Initial extraction from ptzlite.py monolith
+# v1.1 - 2026-10-11 - Never return camera passwords to the browser: mask on read,
+#                     keep the stored password when the mask is sent back on save
 #
 
 import asyncio
@@ -18,6 +20,24 @@ from services.ptz.reolink import _nvr_key, _tokens
 
 router = APIRouter()
 logger = logging.getLogger("PTZLite.api.cameras")
+
+# Returned in place of a real camera password. Sending it back on save means
+# "unchanged". An empty string stays a genuine empty password.
+PW_MASK = "••••••••"
+
+
+def _masked(cam: dict) -> dict:
+    out = dict(cam)
+    if out.get("password"):
+        out["password"] = PW_MASK
+    return out
+
+
+def _drop_masked_password(data: dict) -> dict:
+    """Remove a masked password from an incoming payload so the stored one is kept."""
+    if data.get("password") == PW_MASK:
+        data = {k: v for k, v in data.items() if k != "password"}
+    return data
 
 
 @router.get("/cameras")
@@ -40,7 +60,7 @@ def list_cameras():
 
 @router.get("/api/cameras")
 def api_list_cameras():
-    return _config["cameras"]
+    return [_masked(c) for c in _config["cameras"]]
 
 
 @router.post("/api/cameras", status_code=201)
@@ -51,15 +71,17 @@ async def api_add_camera(request: Request):
         raise HTTPException(400, "id is required")
     if any(c["id"] == cam_id for c in _config["cameras"]):
         raise HTTPException(409, f"Camera '{cam_id}' already exists")
+    if data.get("password") == PW_MASK:
+        data["password"] = ""
     _config["cameras"].append(data)
     _save_config()
     await asyncio.get_running_loop().run_in_executor(None, _reload_go2rtc)
-    return data
+    return _masked(data)
 
 
 @router.put("/api/cameras/{cam_id}")
 async def api_update_camera(cam_id: str, request: Request):
-    data = await request.json()
+    data = _drop_masked_password(await request.json())
     idx = next((i for i, c in enumerate(_config["cameras"]) if c["id"] == cam_id), None)
     if idx is None:
         raise HTTPException(404, f"Camera '{cam_id}' not found")
@@ -77,18 +99,17 @@ async def api_update_camera(cam_id: str, request: Request):
 
     # Invalidate cached token if connection details changed
     old_key = _nvr_key(old_cam)
-    new_key = _nvr_key(data)
-    if old_key != new_key:
+    if old_key != _nvr_key(merged) or merged.get("password") != old_cam.get("password"):
         _tokens.pop(old_key, None)
 
     await asyncio.get_running_loop().run_in_executor(None, _reload_go2rtc)
-    return data
+    return _masked(merged)
 
 
 @router.patch("/api/cameras/{cam_id}")
 async def api_patch_camera(cam_id: str, request: Request):
     """Partial update — only the supplied fields are changed (e.g. {"enabled": false})."""
-    data = await request.json()
+    data = _drop_masked_password(await request.json())
     idx = next((i for i, c in enumerate(_config["cameras"]) if c["id"] == cam_id), None)
     if idx is None:
         raise HTTPException(404, f"Camera '{cam_id}' not found")
@@ -97,7 +118,7 @@ async def api_patch_camera(cam_id: str, request: Request):
     _save_config()
     # Reload go2rtc so enabled/disabled state is reflected in stream registration
     await asyncio.get_running_loop().run_in_executor(None, _reload_go2rtc)
-    return merged
+    return _masked(merged)
 
 
 @router.delete("/api/cameras/{cam_id}", status_code=204)
@@ -125,6 +146,7 @@ async def api_reorder_cameras(request: Request):
 
 @router.get("/api/config/export")
 def api_export_config():
+    # Deliberately unmasked: this is the user's full backup (behind login).
     return {"cameras": _config["cameras"]}
 
 
