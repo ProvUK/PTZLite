@@ -1,8 +1,9 @@
 //
-// Version: 1.0
+// Version: 1.1
 // Updated: 2026-10-11
 //
 // v1.0 - 2026-10-11 - Split out of index.html: Stream selection, theme, layout & paging, live detection, alerts
+// v1.1 - 2026-10-11 - Mobile: pager stays hidden; arrows reach every camera in a group
 //
 // Loaded as a classic script (shared global scope) in the order listed in
 // index.html. Don't convert to an ES module without resolving globals.
@@ -127,6 +128,9 @@ function renderGrid() {
       `<span id="page-info" style="font-size:0.72rem;color:var(--text-muted);min-width:36px;text-align:center">${_page + 1} / ${pc}</span>` +
       `<button id="next-btn" onclick="changePage(1)" ${_page >= pc - 1 ? 'disabled' : ''}>&#8250;</button>`;
   }
+
+  // Phones use the bottom bar instead; renderGrid must not re-show the desktop pager.
+  if (window._isMobile) navEl.style.setProperty('display', 'none', 'important');
 
   _syncMobileNav();
   _startDetectionPolling();
@@ -267,13 +271,17 @@ function selectGroup(idx) {
   renderGrid();
 }
 
+// Bottom-bar arrows: step through the pages of the current group first, then move
+// to the next/previous group (landing on its first/last page).
 function mobileNav(dir) {
-  if (_useNamedPages) {
-    const ni = _groupIdx + dir;
-    if (ni >= 0 && ni < _pageGroups.length) selectGroup(ni);
-  } else {
-    changePage(dir);
-  }
+  const next = _page + dir;
+  if (next >= 0 && next < pageCount()) { changePage(dir); return; }
+  if (!_useNamedPages) return;
+  const ni = _groupIdx + dir;
+  if (ni < 0 || ni >= _pageGroups.length) return;
+  _groupIdx = ni;
+  _page = dir > 0 ? 0 : pageCount() - 1;
+  renderGrid();
 }
 
 function _syncMobileNav() {
@@ -282,9 +290,11 @@ function _syncMobileNav() {
   const info = document.getElementById('mob-page-info');
   if (!prev) return;
   if (_useNamedPages) {
-    prev.disabled = _groupIdx <= 0;
-    next.disabled = _groupIdx >= _pageGroups.length - 1;
-    info.textContent = _pageGroups[_groupIdx]?.name || 'All';
+    const pc = pageCount();
+    prev.disabled = _groupIdx <= 0 && _page <= 0;
+    next.disabled = _groupIdx >= _pageGroups.length - 1 && _page >= pc - 1;
+    const name = _pageGroups[_groupIdx]?.name || 'All';
+    info.textContent = pc > 1 ? `${name} · ${_page + 1}/${pc}` : name;
   } else {
     const pc = pageCount();
     prev.disabled = _page <= 0;

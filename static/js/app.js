@@ -1,9 +1,10 @@
 //
-// Version: 1.1
+// Version: 1.2
 // Updated: 2026-10-11
 //
 // v1.0 - 2026-10-11 - Split out of index.html: Server-offline overlay, go2rtc health, init, mobile UI
 // v1.1 - 2026-10-11 - ?ui=desktop forces the desktop layout (tablets, previews)
+// v1.2 - 2026-10-11 - Mobile: chime button moves into the menu
 //
 // Loaded as a classic script (shared global scope) in the order listed in
 // index.html. Don't convert to an ES module without resolving globals.
@@ -261,7 +262,7 @@ function applyMobileUI() {
 
   // Hide desktop-only header items
   ['cam-count', 'layout-btns', 'nav-btns', 'rtc-status',
-   'fullscreen-grid-btn', 'labels-btn', 'keeplive-btn',
+   'fullscreen-grid-btn', 'labels-btn', 'keeplive-btn', 'chime-btn',
    'theme-btn', 'settings-btn']
     .forEach(id => {
       const el = document.getElementById(id);

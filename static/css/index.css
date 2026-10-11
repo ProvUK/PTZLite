@@ -1,8 +1,9 @@
 /*
- * Version: 1.0
+ * Version: 1.1
  * Updated: 2026-10-11
  *
  * v1.0 - 2026-10-11 - Moved out of index.html's inline <style>
+ * v1.1 - 2026-10-11 - Phone layout: clamp header/page width
  */
 
 :root {
@@ -637,3 +638,11 @@ header h1 { font-size: 1rem; font-weight: 600; letter-spacing: 0.02em; }
   font-size: 0.85rem;
   color: var(--text-muted);
 }
+
+/* Phones: the header must never push the page wider than the screen. */
+body.mobile, body.mobile #grid { max-width: 100vw; overflow-x: hidden; }
+body.mobile header { min-width: 0; overflow: hidden; }
+body.mobile header h1 { flex-shrink: 0; }
+body.mobile #app-version { display: none; }
+body.mobile #alert-chip { max-width: 32vw; padding: 0 8px; }
+body.mobile #mob-page-info { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
