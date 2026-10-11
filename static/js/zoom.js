@@ -1,8 +1,9 @@
 //
-// Version: 1.0
+// Version: 1.1
 // Updated: 2026-10-11
 //
 // v1.0 - 2026-10-11 - Split out of index.html: Digital zoom/pan and optical zoom
+// v1.1 - 2026-10-11 - Zoomed-in clicks use the shared double-click-to-centre handler
 //
 // Loaded as a classic script (shared global scope) in the order listed in
 // index.html. Don't convert to an ES module without resolving globals.
@@ -81,26 +82,7 @@ function digitalPanStart(e, overlay, vsEl, camId, hasPtz = true) {
     document.removeEventListener('touchmove', onMove);
     document.removeEventListener('touchend',  onUp);
     overlay.style.cursor = 'grab';
-    if (!moved) {
-      // Same double-click-to-fullscreen detection as joystickEnd —
-      // first click deferred 280 ms; second click within 300 ms goes fullscreen.
-      const now = Date.now();
-      const ds  = _dblClickState[camId] || (_dblClickState[camId] = { t: 0, timer: null });
-      if (now - ds.t < 300 && ds.timer) {
-        clearTimeout(ds.timer);
-        ds.timer = null;
-        ds.t     = 0;
-        const wrap = overlay.closest('.cam-wrap');
-        if (wrap) _enterCamFullscreen(wrap);
-      } else {
-        ds.t = now;
-        ds.timer = setTimeout(() => {
-          ds.timer = null;
-          ds.t     = 0;
-          if (hasPtz) handlePtzClick(startCoords, overlay, camId);
-        }, 280);
-      }
-    }
+    if (!moved) _camClick(startCoords, overlay, camId, hasPtz);   // same gestures as unzoomed
   }
 
   document.addEventListener('mousemove', onMove);

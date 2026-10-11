@@ -1,8 +1,9 @@
 //
-// Version: 1.0
+// Version: 1.1
 // Updated: 2026-10-11
 //
 // v1.0 - 2026-10-11 - Split out of index.html: PTZ joystick and click-to-centre
+// v1.1 - 2026-10-11 - Double-click to centre (was single click); single click is inert
 //
 // Loaded as a classic script (shared global scope) in the order listed in
 // index.html. Don't convert to an ES module without resolving globals.
@@ -16,7 +17,7 @@ const JOYSTICK_CLICK_PX =  6;
 const JOYSTICK_RATE_MS  = 80;
 
 const _joysticks     = {};
-const _dblClickState = {};   // camId → { t: 0, timer: null } for double-click-to-fullscreen
+const _dblClickState = {};   // camId → { t, x, y } of the last click, for double-click-to-centre
 
 // Normalise mouse and touch events to a plain {clientX, clientY} object.
 function _evClientXY(e) {
@@ -127,29 +128,26 @@ function joystickEnd(overlay, state, camId) {
   if (state.wasMoving) {
     fetch(`/ptz/${camId}/stop`, { method: 'POST' }).catch(() => {});
   }
-  if (!state.moved) {
-    // Double-click detection: first click deferred 280 ms; second click within that
-    // window cancels the PTZ command and goes fullscreen instead.
-    const now = Date.now();
-    const ds  = _dblClickState[camId] || (_dblClickState[camId] = { t: 0, timer: null });
-    if (now - ds.t < 300 && ds.timer) {
-      // Second click — go fullscreen, suppress both PTZ moves
-      clearTimeout(ds.timer);
-      ds.timer = null;
-      ds.t     = 0;
-      const wrap = overlay.closest('.cam-wrap');
-      if (wrap) _enterCamFullscreen(wrap);
-    } else {
-      // First click — defer so a second click can cancel it
-      ds.t = now;
-      const coords = state.startCoords;
-      ds.timer = setTimeout(() => {
-        ds.timer = null;
-        ds.t     = 0;
-        handlePtzClick(coords, overlay, camId);
-      }, 280);
-    }
-    return;
+  if (!state.moved) _camClick(state.startCoords, overlay, camId, true);
+}
+
+// Click gestures on a camera (drags are handled separately as joystick / pan):
+//   double-click → centre the camera on that point (PTZ cameras)
+//   single click → nothing, so a stray click never moves a camera
+// Exception: manual calibration's "click the object" steps take single clicks.
+// Fullscreen is on right-click (see buildCard).
+const _DBL_MS = 350, _DBL_PX = 24;
+function _camClick(coords, overlay, camId, hasPtz) {
+  if (_calib[camId]) { handlePtzClick(coords, overlay, camId); return; }
+  if (!hasPtz) return;
+  const now = Date.now();
+  const ds = _dblClickState[camId] || (_dblClickState[camId] = { t: 0, x: 0, y: 0 });
+  const near = Math.hypot(coords.clientX - ds.x, coords.clientY - ds.y) <= _DBL_PX;
+  if (now - ds.t < _DBL_MS && near) {
+    ds.t = 0;                                   // second click: move now
+    handlePtzClick(coords, overlay, camId);
+  } else {
+    ds.t = now; ds.x = coords.clientX; ds.y = coords.clientY;   // first click: remember
   }
 }
 

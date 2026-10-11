@@ -1,8 +1,9 @@
 //
-// Version: 1.0
+// Version: 1.1
 // Updated: 2026-10-11
 //
 // v1.0 - 2026-10-11 - Split out of index.html: Camera cards, fullscreen, presets bar
+// v1.1 - 2026-10-11 - Right-click toggles fullscreen (double-click now centres PTZ)
 //
 // Loaded as a classic script (shared global scope) in the order listed in
 // index.html. Don't convert to an ES module without resolving globals.
@@ -247,12 +248,10 @@ function buildCard(cam, streamDelay = 0) {
   });
   wrap.appendChild(fsBtn);
 
-  // ── Double-click / double-right-click helpers (local to this card) ──────────
-  let _lastRightClick = 0;
+  // ── Right-click toggles this camera's fullscreen ────────────────────────────
   function _onCardRightClick() {
-    const now = Date.now();
-    if (now - _lastRightClick < 400) _exitFullscreen();
-    _lastRightClick = now;
+    if (document.fullscreenElement || document.webkitFullscreenElement) _exitFullscreen();
+    else _enterCamFullscreen(wrap);
   }
 
   if (cam.ptz) {
