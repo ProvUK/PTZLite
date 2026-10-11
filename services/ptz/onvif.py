@@ -1,8 +1,9 @@
 #
-# Version: 1.0
-# Updated: 2026-05-18
+# Version: 1.1
+# Updated: 2026-10-11
 #
 # v1.0 - 2026-05-18 - Initial extraction from ptzlite.py monolith
+# v1.1 - 2026-10-11 - Use shared pooled HTTP session; retry once on stale keep-alive
 #
 
 # ── ONVIF PTZ (Dahua / Hikvision / generic ONVIF cameras) ─────────────────────
@@ -17,6 +18,8 @@ import os
 import xml.etree.ElementTree as ET
 
 import aiohttp
+
+from services.http import STALE_CONN_ERRORS, get_session
 
 logger = logging.getLogger("PTZLite.services.ptz.onvif")
 
@@ -82,12 +85,16 @@ async def _onvif_post(cam: dict, action: str, body: str, timeout: float = 5.0) -
         "Content-Type": "application/soap+xml; charset=utf-8",
         "SOAPAction": f'"http://www.onvif.org/ver20/ptz/wsdl/{action}"',
     }
-    async with aiohttp.ClientSession() as session:
-        async with session.post(
-            url, data=envelope, headers=headers, ssl=False,
-            timeout=aiohttp.ClientTimeout(total=timeout),
-        ) as resp:
-            return await resp.text()
+    for attempt in (1, 2):
+        try:
+            async with get_session().post(
+                url, data=envelope, headers=headers,
+                timeout=aiohttp.ClientTimeout(total=timeout),
+            ) as resp:
+                return await resp.text()
+        except STALE_CONN_ERRORS:
+            if attempt == 2:
+                raise
 
 
 async def _onvif_continuous(cam: dict, pan: float = 0.0, tilt: float = 0.0, zoom: float = 0.0) -> None:

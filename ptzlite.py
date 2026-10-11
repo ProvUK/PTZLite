@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Version: 5.40
+# Version: 5.41
 # Updated: 2026-10-11
 # v1.0 - 2026-04-28 - Initial stable release: go2rtc streaming, PTZ click-to-centre,
 #                     sequential pan+tilt, optical zoom, presets, serialized NVR API
@@ -159,6 +159,7 @@
 #                      window with its own taskbar icon; falls back to default browser if unavailable
 # v5.40 - 2026-10-11 - Auth middleware: plain 401 for all non-page requests, redirect only page loads;
 #                      startup pre-warm moved from deprecated on_event to lifespan
+# v5.41 - 2026-10-11 - Register detection SSE router; close shared camera HTTP session on shutdown
 """
 Reolink camera viewer with click-to-pan PTZ control.
 
@@ -191,10 +192,12 @@ from core.log import setup_logging
 from core.paths import APP_VERSION, GO2RTC_PORT, _STATIC_DIR, _USER_DIR
 from services.browser import open_viewer
 from services.go2rtc import _launch_prewarm, start_go2rtc, stop_go2rtc
+from services.http import close_session
 
 # Import routers
 from api.auth import router as auth_router, is_authenticated
 from api.cameras import router as cameras_router
+from api.detect import router as detect_router
 from api.go2rtc_api import router as go2rtc_router
 from api.misc import router as misc_router
 from api.ptz import router as ptz_router
@@ -209,6 +212,7 @@ async def _lifespan(_app):
     # Keep go2rtc RTSP sessions warm so streams open instantly.
     asyncio.create_task(_launch_prewarm(delay=3.0))
     yield
+    await close_session()   # shared camera HTTP pool
 
 
 app = FastAPI(title="PTZLite", lifespan=_lifespan)
@@ -235,6 +239,7 @@ async def auth_middleware(request: Request, call_next):
 app.include_router(auth_router)
 app.include_router(ptz_router)
 app.include_router(cameras_router)
+app.include_router(detect_router)
 app.include_router(go2rtc_router)
 app.include_router(misc_router)
 

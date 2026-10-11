@@ -1,6 +1,6 @@
 #
-# Version: 1.5
-# Updated: 2026-05-23
+# Version: 2.2
+# Updated: 2026-10-11
 #
 # v1.0 - 2026-05-18 - Initial extraction from ptzlite.py monolith
 # v1.1 - 2026-05-19 - Fix camera keeps moving: send stop before timed click-to-move (Reolink + ONVIF)
@@ -14,6 +14,7 @@
 # v1.9 - 2026-05-23 - Add Reolink absolute zoom, auto-tracking, and guard-position endpoints
 # v2.0 - 2026-07-28 - Add floodlight/IR, siren, patrol, save-preset, and live detection-state endpoints
 # v2.1 - 2026-07-28 - Floodlight/IR/siren work on any Reolink camera, not just PTZ (_reolink_cam gate)
+# v2.2 - 2026-10-11 - Detection moved to api/detect.py (server-side batched poller + SSE)
 #
 
 import asyncio
@@ -737,47 +738,6 @@ async def save_preset(cam_id: str, payload: SavePresetPayload):
                       "id": int(payload.id), "name": name}}}])
     preset_cache.pop(cam_id, None)   # force preset bar to reload
     return {"ok": resp[0].get("code", -1) == 0, "id": payload.id, "name": name}
-
-
-# ── Live detection state (motion + AI) for all Reolink cameras ─────────────────
-
-@router.get("/detect/states")
-async def detect_states():
-    """Poll motion + AI detection state for every Reolink camera in one request.
-
-    The viewer calls this on an interval to glow cameras that are actively seeing
-    a person/vehicle/motion. Serialized through the NVR lock like all other calls.
-    """
-    result: dict = {}
-    for cam in cameras.values():
-        if not cam.get("enabled", True):
-            continue
-        if _is_onvif(cam) or cam.get("brand", "").lower() != "reolink":
-            continue
-        pc = _ptz_cam(cam)
-        ch = pc.get("channel", 0)
-        alerts: list[str] = []
-        motion = False
-        try:
-            ai = await _nvr_call(pc, "GetAiState", [{"cmd": "GetAiState", "action": 0,
-                "param": {"channel": ch}}], timeout=4)
-            v = ai[0].get("value", {}) if ai[0].get("code", -1) == 0 else {}
-            for t in ("people", "vehicle", "dog_cat", "face", "package"):
-                d = v.get(t)
-                if isinstance(d, dict) and d.get("support") and d.get("alarm_state"):
-                    alerts.append(t)
-        except Exception:
-            pass
-        if not alerts:
-            try:
-                md = await _nvr_call(pc, "GetMdState", [{"cmd": "GetMdState", "action": 0,
-                    "param": {"channel": ch}}], timeout=4)
-                if md[0].get("code", -1) == 0 and int(md[0]["value"].get("state", 0)) == 1:
-                    motion = True
-            except Exception:
-                pass
-        result[cam["id"]] = {"motion": motion, "alerts": alerts}
-    return result
 
 
 @router.get("/presets/{cam_id}")

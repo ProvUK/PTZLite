@@ -321,6 +321,25 @@
   </div>
 
   <div style="margin-top:28px">
+    <p class="section-title">Performance</p>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:18px 20px;max-width:460px">
+      <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:16px">
+        Keep camera streams warm in the background so they open instantly. Each warm
+        stream holds one connection open to your NVR; turn this down if the NVR
+        struggles or you rarely switch streams.
+      </p>
+      <label for="prewarm-select" style="font-size:0.85rem;color:var(--text);display:block;margin-bottom:6px">Keep warm</label>
+      <select id="prewarm-select" onchange="applyPrewarm()" style="min-width:220px">
+        <option value="both">Main and sub streams (fastest)</option>
+        <option value="main">Main streams only</option>
+        <option value="sub">Sub streams only</option>
+        <option value="none">Nothing (lightest on the NVR)</option>
+      </select>
+      <div id="prewarm-status" style="font-size:0.78rem;color:var(--text-muted);margin-top:10px"></div>
+    </div>
+  </div>
+
+  <div style="margin-top:28px">
     <p class="section-title">Help &amp; About</p>
     <div style="display:flex;gap:10px;flex-wrap:wrap">
       <a href="/help.html" class="back-btn" style="margin-left:0">Help</a>
@@ -1070,6 +1089,23 @@ async function loadAppWindowStatus() {
   } catch {}
 }
 
+async function loadPrewarm() {
+  try {
+    const d = await fetch('/api/config/prewarm').then(r => r.json());
+    document.getElementById('prewarm-select').value = d.mode;
+  } catch (e) { /* older server */ }
+}
+
+async function applyPrewarm() {
+  const mode = document.getElementById('prewarm-select').value;
+  const status = document.getElementById('prewarm-status');
+  const r = await fetch('/api/config/prewarm', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ mode }),
+  });
+  status.textContent = r.ok ? 'Saved — applied immediately.' : 'Could not save.';
+}
+
 async function applyAppWindow() {
   const enabled  = document.getElementById('app-window-toggle').checked;
   const statusEl = document.getElementById('app-window-status');
@@ -1109,6 +1145,7 @@ async function applyAppWindow() {
 loadCameras();
 loadSecurityStatus();
 loadAppWindowStatus();
+loadPrewarm();
 
 function applyTheme(light) { document.body.classList.toggle('light', light); }
 function toggleTheme() {

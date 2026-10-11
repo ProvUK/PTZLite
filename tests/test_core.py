@@ -1,8 +1,9 @@
 #
-# Version: 1.0
+# Version: 1.1
 # Updated: 2026-10-11
 #
 # v1.0 - 2026-10-11 - RTSP URL builders and PTZ move maths
+# v1.1 - 2026-10-11 - Pre-warm mode tests
 #
 import math
 
@@ -62,3 +63,15 @@ def test_move_duration_is_proportional_and_trimmed_by_gain():
 def test_move_duration_falls_back_to_shared_speed():
     from api.ptz import _move_duration
     assert _move_duration({"ptz_degrees_per_second": 40}, "tilt", 20) == pytest.approx(0.5)
+
+
+@pytest.mark.parametrize("cfg,expected", [({}, "both"), ({"prewarm": "sub"}, "sub"),
+                                          ({"prewarm": "none"}, "none"), ({"prewarm": "bogus"}, "both")])
+def test_prewarm_mode(app_env, cfg, expected):
+    from services.go2rtc import prewarm_mode
+    app_env._config.update(cfg)
+    assert prewarm_mode() == expected
+
+
+def test_prewarm_setting_validated(client):
+    assert client.post("/api/config/prewarm", json={"mode": "bogus"}).status_code == 400

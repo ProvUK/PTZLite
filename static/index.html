@@ -836,36 +836,54 @@ function renderGrid() {
   _startDetectionPolling();
 }
 
-// ── Live detection poller ─────────────────────────────────────────────────────
-// Polls /detect/states (all Reolink cameras in one request) and glows / badges
-// any card whose camera is actively seeing a person/vehicle/motion.
-let _detectPollTimer = null;
+// ── Live detection ────────────────────────────────────────────────────────────
+// The server runs one batched poller and pushes the full state map over SSE
+// whenever it changes. We drop the connection while the tab is hidden, which
+// lets the server stop polling the NVR when nobody is watching.
+let _detectSource = null;
+let _detectStates = {};
 const _DETECT_LABELS = { people: 'Person', vehicle: 'Vehicle', dog_cat: 'Animal', face: 'Face', package: 'Package' };
-function _startDetectionPolling() {
-  if (_detectPollTimer) return;
-  const poll = async () => {
-    if (document.hidden) return;
-    let states;
-    try { states = await fetch('/detect/states').then(r => r.json()); } catch { return; }
-    document.querySelectorAll('.cam-wrap[data-cam-id]').forEach(wrap => {
-      const s = states[wrap.dataset.camId];
-      const badge = wrap.querySelector('.detect-badge');
-      const ai = s && s.alerts && s.alerts.length;
-      if (!s || (!ai && !s.motion)) {
-        wrap.classList.remove('alerting', 'ai');
-        return;
-      }
-      wrap.classList.add('alerting');
-      wrap.classList.toggle('ai', !!ai);
-      if (badge) {
-        badge.classList.toggle('motion', !ai);
-        badge.textContent = ai ? s.alerts.map(t => _DETECT_LABELS[t] || t).join(' · ') : 'Motion';
-      }
-    });
-  };
-  _detectPollTimer = setInterval(poll, 3000);
-  poll();
+
+function _applyDetection() {
+  document.querySelectorAll('.cam-wrap[data-cam-id]').forEach(wrap => {
+    const s = _detectStates[wrap.dataset.camId];
+    const badge = wrap.querySelector('.detect-badge');
+    const ai = s && s.alerts && s.alerts.length;
+    if (!s || (!ai && !s.motion)) {
+      wrap.classList.remove('alerting', 'ai');
+      return;
+    }
+    wrap.classList.add('alerting');
+    wrap.classList.toggle('ai', !!ai);
+    if (badge) {
+      badge.classList.toggle('motion', !ai);
+      badge.textContent = ai ? s.alerts.map(t => _DETECT_LABELS[t] || t).join(' · ') : 'Motion';
+    }
+  });
 }
+
+function _connectDetection() {
+  if (_detectSource || document.hidden) return;
+  _detectSource = new EventSource('/detect/stream');
+  _detectSource.onmessage = e => {
+    try { _detectStates = JSON.parse(e.data) || {}; } catch { return; }
+    _applyDetection();
+  };
+  // EventSource reconnects by itself after network blips.
+}
+
+function _disconnectDetection() {
+  if (_detectSource) { _detectSource.close(); _detectSource = null; }
+}
+
+function _startDetectionPolling() {   // called after every grid render
+  _connectDetection();
+  _applyDetection();                  // re-badge freshly built cards immediately
+}
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) _disconnectDetection(); else _connectDetection();
+});
 
 function setLayout(layout) {
   _layout = layout;

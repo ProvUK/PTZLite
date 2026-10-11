@@ -1,10 +1,11 @@
 #
-# Version: 1.2
+# Version: 1.3
 # Updated: 2026-10-11
 #
 # v1.0 - 2026-05-18 - Initial extraction from ptzlite.py monolith
 # v1.1 - 2026-05-21 - Add GET/POST /api/config/app_window and POST /api/open_viewer
 # v1.2 - 2026-10-11 - Camera test resolves a masked password to the stored one
+# v1.3 - 2026-10-11 - GET/POST /api/config/prewarm
 #
 
 import asyncio
@@ -19,6 +20,7 @@ from api.cameras import PW_MASK
 from core.config import _config, _save_config, cameras
 from core.paths import APP_VERSION, _STATIC_DIR, _USER_DIR
 from services.browser import open_viewer
+from services.go2rtc import PREWARM_MODES, _launch_prewarm, prewarm_mode
 from services.discovery import _ws_discover
 from services.rtsp import _clean_rtsp_url, _rtsp_describe_sync
 
@@ -99,6 +101,23 @@ async def set_app_window(request: Request):
     _save_config()
     logger.info("App window mode %s", "enabled" if _config["app_window"] else "disabled")
     return {"ok": True}
+
+
+@router.get("/api/config/prewarm")
+async def get_prewarm():
+    return {"mode": prewarm_mode(), "modes": list(PREWARM_MODES)}
+
+
+@router.post("/api/config/prewarm")
+async def set_prewarm(request: Request):
+    mode = (await request.json()).get("mode", "both")
+    if mode not in PREWARM_MODES:
+        raise HTTPException(400, f"mode must be one of {PREWARM_MODES}")
+    _config["prewarm"] = mode
+    _save_config()
+    asyncio.create_task(_launch_prewarm(delay=0.5))   # apply now, no restart
+    logger.info("Pre-warm mode set to %s", mode)
+    return {"ok": True, "mode": mode}
 
 
 @router.post("/api/open_viewer")

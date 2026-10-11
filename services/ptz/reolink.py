@@ -1,9 +1,11 @@
 #
-# Version: 1.1
-# Updated: 2026-05-22
+# Version: 1.2
+# Updated: 2026-10-11
 #
 # v1.0 - 2026-05-18 - Initial extraction from ptzlite.py monolith
 # v1.1 - 2026-05-22 - Retry on rspCode -6 (token invalidated by NVR between calls)
+# v1.2 - 2026-10-11 - Shared pooled session; retry once on stale keep-alive; clear
+#                     error on failed login; track PTZ activity per NVR
 #
 
 import asyncio
@@ -11,6 +13,8 @@ import logging
 import time
 
 import aiohttp
+
+from services.http import STALE_CONN_ERRORS, get_session
 
 logger = logging.getLogger("PTZLite.services.ptz.reolink")
 
@@ -23,6 +27,11 @@ logger = logging.getLogger("PTZLite.services.ptz.reolink")
 
 _tokens: dict[str, tuple[str, float]] = {}
 _nvr_locks: dict[str, asyncio.Lock] = {}
+_last_ptz: dict[str, float] = {}   # NVR key -> monotonic time of last PtzCtrl
+
+
+class ReolinkLoginError(RuntimeError):
+    pass
 
 _DIR = {
     ( 1,  0): "Right",   (-1,  0): "Left",
@@ -50,12 +59,16 @@ def _api_url(cam: dict, cmd: str, token: str) -> str:
 
 
 async def _post(url: str, payload: list, timeout: int = 8) -> list:
-    async with aiohttp.ClientSession() as session:
-        async with session.post(
-            url, json=payload, ssl=False,
-            timeout=aiohttp.ClientTimeout(total=timeout)
-        ) as resp:
-            return await resp.json(content_type=None)
+    for attempt in (1, 2):
+        try:
+            async with get_session().post(
+                url, json=payload,
+                timeout=aiohttp.ClientTimeout(total=timeout),
+            ) as resp:
+                return await resp.json(content_type=None)
+        except STALE_CONN_ERRORS:
+            if attempt == 2:
+                raise   # pooled socket was closed by the camera; retry once fresh
 
 
 async def _login(cam: dict) -> str:
@@ -67,8 +80,12 @@ async def _login(cam: dict) -> str:
     data = await _post(login_url, [{"cmd": "Login", "action": 0, "param": {
         "User": {"userName": cam["username"], "password": cam["password"]}
     }}])
-    token = data[0]["value"]["Token"]["name"]
-    lease = data[0]["value"]["Token"]["leaseTime"]
+    try:
+        token = data[0]["value"]["Token"]["name"]
+        lease = data[0]["value"]["Token"]["leaseTime"]
+    except (KeyError, IndexError, TypeError):
+        detail = (data[0].get("error", {}) if data and isinstance(data[0], dict) else {}).get("detail")
+        raise ReolinkLoginError(f"Login to {key} failed: {detail or data}") from None
     _tokens[key] = (token, time.time() + lease)
     logger.info("Login %s: token cached (lease=%ss)", key, lease)
     return token
@@ -91,6 +108,8 @@ async def _nvr_call(cam: dict, cmd: str, payload: list, timeout: int = 8) -> lis
     """
     key = _nvr_key(cam)
     lock = _get_nvr_lock(cam)
+    if cmd == "PtzCtrl":
+        _last_ptz[key] = time.monotonic()
     async with lock:
         token, expires = _tokens.get(key, ("", 0.0))
         if not token or time.time() >= expires - 60:
@@ -108,6 +127,11 @@ async def _nvr_call(cam: dict, cmd: str, payload: list, timeout: int = 8) -> lis
             result = await _post(_api_url(cam, cmd, token), payload, timeout)
 
         return result
+
+
+def ptz_recently_active(cam: dict, within: float = 3.0) -> bool:
+    """True if a PTZ command was sent to this camera's NVR in the last `within` s."""
+    return time.monotonic() - _last_ptz.get(_nvr_key(cam), -1e9) < within
 
 
 async def _ptz_stop(cam: dict) -> None:

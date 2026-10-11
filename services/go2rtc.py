@@ -1,5 +1,5 @@
 #
-# Version: 1.5
+# Version: 1.6
 # Updated: 2026-10-11
 #
 # v1.0 - 2026-05-18 - Initial extraction from ptzlite.py monolith
@@ -16,6 +16,7 @@
 #                     a simultaneous 12-session RTSP burst on startup.
 # v1.4 - 2026-07-28 - Register per-camera _talk stream (backchannel on) for two-way audio.
 # v1.5 - 2026-10-11 - Bind go2rtc API to 127.0.0.1 (browser goes via authenticated proxy)
+# v1.6 - 2026-10-11 - Configurable pre-warm (both/main/sub/none)
 #
 
 import asyncio
@@ -40,6 +41,7 @@ logger = logging.getLogger("PTZLite.services.go2rtc")
 _go2rtc_proc: subprocess.Popen | None = None
 _go2rtc_log: collections.deque = collections.deque(maxlen=150)
 _prewarm_tasks: list[asyncio.Task] = []
+_prewarm_gen = 0   # bumped per launch; an older launch stops spawning
 
 
 def _build_go2rtc_config(streams: dict) -> dict:
@@ -114,15 +116,39 @@ def _cancel_prewarm() -> None:
     _prewarm_tasks.clear()
 
 
+PREWARM_MODES = ("both", "main", "sub", "none")
+
+
+def prewarm_mode() -> str:
+    """Which streams to keep warm: both (default), main, sub, or none.
+
+    Each warm stream holds one RTSP session open to the NVR permanently, so
+    "both" costs two sessions per camera in exchange for instant stream opens.
+    """
+    mode = _config.get("prewarm", "both")
+    return mode if mode in PREWARM_MODES else "both"
+
+
 async def _launch_prewarm(delay: float = 3.0) -> None:
+    global _prewarm_gen
+    _prewarm_gen += 1
+    gen = _prewarm_gen
     _cancel_prewarm()
     await asyncio.sleep(delay)
+    if gen != _prewarm_gen:
+        return
     enabled = [c for c in _config["cameras"] if c.get("enabled", True)]
+    mode = prewarm_mode()
+    if mode == "none":
+        logger.info("Pre-warming disabled")
+        return
 
-    # Sub streams first — these are the default viewing stream
-    for i, cam in enumerate(enabled):
+    # Sub streams first
+    for i, cam in enumerate(enabled if mode in ("both", "sub") else []):
         if i > 0:
             await asyncio.sleep(0.4)
+        if gen != _prewarm_gen:
+            return
         name = f"{cam['id']}_sub"
         t = asyncio.create_task(_prewarm_stream_loop(name))
         _prewarm_tasks.append(t)
@@ -131,10 +157,13 @@ async def _launch_prewarm(delay: float = 3.0) -> None:
     # Main streams after a short pause — keeps go2rtc's RTSP session alive so that
     # switching to main (e.g. double-click fullscreen) connects instantly rather than
     # waiting 3-5 s for RTSP negotiation + keyframe on a cold stream.
-    await asyncio.sleep(3.0)
-    for i, cam in enumerate(enabled):
+    if mode == "both":
+        await asyncio.sleep(3.0)
+    for i, cam in enumerate(enabled if mode in ("both", "main") else []):
         if i > 0:
             await asyncio.sleep(0.4)
+        if gen != _prewarm_gen:
+            return
         name = f"{cam['id']}_main"
         t = asyncio.create_task(_prewarm_stream_loop(name))
         _prewarm_tasks.append(t)
