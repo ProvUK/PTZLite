@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Version: 5.42
+# Version: 5.43
 # Updated: 2026-10-11
 # v1.0 - 2026-04-28 - Initial stable release: go2rtc streaming, PTZ click-to-centre,
 #                     sequential pan+tilt, optical zoom, presets, serialized NVR API
@@ -161,6 +161,7 @@
 #                      startup pre-warm moved from deprecated on_event to lifespan
 # v5.41 - 2026-10-11 - Register detection SSE router; close shared camera HTTP session on shutdown
 # v5.42 - 2026-10-11 - Readable JSON errors for camera login failures, timeouts, unreachable cameras
+# v5.43 - 2026-10-11 - Cache-Control: no-cache for html/js/css (viewer split into static/js + css)
 """
 Reolink camera viewer with click-to-pan PTZ control.
 
@@ -236,7 +237,12 @@ async def auth_middleware(request: Request, call_next):
         if p == "/" or p.endswith(".html"):
             return RedirectResponse("/login.html")
         return JSONResponse({"detail": "Not authenticated"}, status_code=401)
-    return await call_next(request)
+    response = await call_next(request)
+    # Revalidate app code on every load (cheap ETag check) so an update is never
+    # run against stale cached scripts/styles.
+    if p == "/" or p.endswith((".html", ".js", ".css")):
+        response.headers["Cache-Control"] = "no-cache"
+    return response
 
 
 # Camera failures surface in the UI as readable messages instead of a bare 500.
