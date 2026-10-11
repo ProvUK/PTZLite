@@ -1,9 +1,10 @@
 /*
- * Version: 1.1
+ * Version: 1.2
  * Updated: 2026-10-11
  *
  * v1.0 - 2026-10-11 - Moved out of index.html's inline <style>
  * v1.1 - 2026-10-11 - Phone layout: clamp header/page width
+ * v1.2 - 2026-10-11 - Phone landscape: hide header/bottom bar, camera fills the screen
  */
 
 :root {
@@ -646,3 +647,12 @@ body.mobile header h1 { flex-shrink: 0; }
 body.mobile #app-version { display: none; }
 body.mobile #alert-chip { max-width: 32vw; padding: 0 8px; }
 body.mobile #mob-page-info { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Phone turned sideways: hide the header and bottom bar so the camera fills the screen.
+   The height limit keeps landscape tablets and touchscreen laptops on the normal layout. */
+@media (orientation: landscape) and (max-height: 540px) {
+  body.mob-ui header, body.mob-ui #mobile-nav { display: none !important; }
+  body.mob-ui { height: 100vh; height: 100dvh; padding-bottom: 0 !important; }
+  body.mob-ui #grid { padding: 0; gap: 0; }
+  body.mob-ui .cam-wrap { border-radius: 0; border: none; }
+}

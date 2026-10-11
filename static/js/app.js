@@ -1,10 +1,11 @@
 //
-// Version: 1.2
+// Version: 1.3
 // Updated: 2026-10-11
 //
 // v1.0 - 2026-10-11 - Split out of index.html: Server-offline overlay, go2rtc health, init, mobile UI
 // v1.1 - 2026-10-11 - ?ui=desktop forces the desktop layout (tablets, previews)
 // v1.2 - 2026-10-11 - Mobile: chime button moves into the menu
+// v1.3 - 2026-10-11 - Mobile: body.mob-ui class; bottom bar hideable for phone landscape
 //
 // Loaded as a classic script (shared global scope) in the order listed in
 // index.html. Don't convert to an ES module without resolving globals.
@@ -253,9 +254,10 @@ function applyMobileUI() {
   const hamburger = document.getElementById('mob-hamburger');
   if (hamburger) hamburger.style.setProperty('display', 'flex', 'important');
 
-  // Show bottom nav
+  // Show bottom nav (not !important, so the phone-landscape CSS can hide it)
+  document.body.classList.add('mob-ui');
   const mobileNav = document.getElementById('mobile-nav');
-  if (mobileNav) mobileNav.style.setProperty('display', 'flex', 'important');
+  if (mobileNav) mobileNav.style.display = 'flex';
 
   // Shrink body height so grid doesn't extend behind the fixed bottom nav
   document.body.style.paddingBottom = 'calc(64px + env(safe-area-inset-bottom, 0px))';
