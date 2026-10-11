@@ -321,6 +321,24 @@
   </div>
 
   <div style="margin-top:28px">
+    <p class="section-title">Appearance</p>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:18px 20px;max-width:460px">
+      <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:16px">
+        Choose a look for the camera viewer. Saved on this device; applies next time
+        the viewer opens. Light mode is available with Classic only.
+      </p>
+      <label for="skin-select" style="font-size:0.85rem;color:var(--text);display:block;margin-bottom:6px">Skin</label>
+      <select id="skin-select" onchange="applySkin()" style="min-width:220px">
+        <option value="neon">Command Centre (cyan glass)</option>
+        <option value="aurora">Aurora (graphite and violet)</option>
+        <option value="tactical">Tactical (amber HUD)</option>
+        <option value="classic">Classic</option>
+      </select>
+      <div id="skin-status" style="font-size:0.78rem;color:var(--text-muted);margin-top:10px"></div>
+    </div>
+  </div>
+
+  <div style="margin-top:28px">
     <p class="section-title">Performance</p>
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:18px 20px;max-width:460px">
       <p style="font-size:0.82rem;color:var(--text-muted);margin-bottom:16px">
@@ -1079,6 +1097,18 @@ async function loadAppWindowStatus() {
   } catch {}
 }
 
+function loadSkin() {
+  let s = null;
+  try { s = localStorage.getItem('skin'); } catch (e) {}
+  document.getElementById('skin-select').value = s || 'neon';
+}
+
+function applySkin() {
+  const s = document.getElementById('skin-select').value;
+  try { localStorage.setItem('skin', s); } catch (e) {}
+  document.getElementById('skin-status').textContent = 'Saved. Go back to the viewer to see it.';
+}
+
 async function loadPrewarm() {
   try {
     const d = await fetch('/api/config/prewarm').then(r => r.json());
@@ -1136,6 +1166,7 @@ loadCameras();
 loadSecurityStatus();
 loadAppWindowStatus();
 loadPrewarm();
+loadSkin();
 
 function applyTheme(light) { document.body.classList.toggle('light', light); }
 function toggleTheme() {

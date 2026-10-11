@@ -1,0 +1,82 @@
+/*
+ * Version: 1.0
+ * Updated: 2026-10-11
+ *
+ * v1.0 - 2026-10-11 - "Tactical" skin: security-ops HUD, amber accents, corner brackets
+ */
+@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&display=swap");
+
+/* Skins are dark designs: keep their palette even if light mode was on. */
+:root, .light {
+  --bg: #050605; --surface: #0b0d0a; --surface2: #121510;
+  --border: #23291c; --border2: #2f3725;
+  --text: #e8e2c8; --text-muted: #7c7a62; --text-btn: #d8c27a; --cam-bg: #030403;
+  --amber: #f5b301; --amber-dim: rgba(245,179,1,.18);
+  --mono: "JetBrains Mono", Consolas, "Courier New", monospace;
+}
+body { font-family: var(--mono); background: var(--bg); }
+/* Subtle scanlines over the whole UI */
+body::after {
+  content: ""; position: fixed; inset: 0; pointer-events: none; z-index: 9999;
+  background: repeating-linear-gradient(0deg, rgba(0,0,0,.18) 0 1px, transparent 1px 3px);
+}
+
+header { background: var(--surface); border-bottom: 1px solid var(--amber); box-shadow: 0 1px 0 var(--amber-dim); }
+#cam-count, #page-info { font-family: var(--mono); text-transform: uppercase; letter-spacing: .12em; }
+
+#stream-btns button, #layout-btns button, #nav-btns button,
+#settings-btn, #theme-btn, #fullscreen-grid-btn, #labels-btn, #keeplive-btn, #chime-btn {
+  background: transparent; border: 1px solid var(--border2); border-radius: 0;
+  color: var(--text-btn); font-family: var(--mono); text-transform: uppercase; letter-spacing: .1em;
+}
+#stream-btns button:hover, #layout-btns button:hover, #nav-btns button:hover,
+#settings-btn:hover, #theme-btn:hover, #fullscreen-grid-btn:hover, #labels-btn:hover,
+#keeplive-btn:hover, #chime-btn:hover { background: var(--amber-dim); color: var(--amber); border-color: var(--amber); }
+#stream-btns button.active, #layout-btns button.active, #nav-btns button.active,
+#keeplive-btn.active, #chime-btn.active { background: var(--amber); color: #0a0a00; border-color: var(--amber); font-weight: 700; }
+
+#grid { gap: 6px; padding: 6px; }
+.cam-wrap { border-radius: 0; border: 1px solid var(--border2); }
+/* Corner brackets */
+.cam-wrap::before, .cam-wrap::after {
+  content: ""; position: absolute; width: 18px; height: 18px; pointer-events: none; z-index: 6;
+  border: 2px solid var(--amber); opacity: .75;
+}
+.cam-wrap::before { top: 5px; left: 5px; border-right: none; border-bottom: none; }
+.cam-wrap::after  { bottom: 5px; right: 5px; border-left: none; border-top: none; }
+.cam-wrap:hover::before, .cam-wrap:hover::after { opacity: 1; width: 26px; height: 26px; transition: all .2s; }
+
+.cam-label {
+  top: 10px; left: 30px; background: rgba(0,0,0,.72); border: none;
+  border-left: 3px solid var(--amber); border-radius: 0;
+  font-family: var(--mono); font-size: .66rem; font-weight: 700;
+  letter-spacing: .14em; text-transform: uppercase; color: var(--amber); padding: 3px 9px;
+}
+.cam-label::after {   /* blinking REC marker */
+  content: "● REC"; margin-left: 10px; color: #ff3b30; animation: skin-rec 1.4s steps(1) infinite;
+}
+@keyframes skin-rec { 50% { opacity: 0; } }
+
+.ptz-badge { background: transparent; border: 1px solid var(--amber); color: var(--amber); border-radius: 0; font-family: var(--mono); }
+.preset-btn, .calib-btn, .ctrl-btn {
+  background: rgba(0,0,0,.75); border: 1px solid var(--border2); border-radius: 0;
+  color: var(--text-btn); font-family: var(--mono); text-transform: uppercase; letter-spacing: .08em;
+}
+.preset-btn:hover, .calib-btn:hover, .ctrl-btn:hover { border-color: var(--amber); color: var(--amber); background: var(--amber-dim); }
+.calib-btn.active, .ctrl-btn.active { background: var(--amber); color: #0a0a00; border-color: var(--amber); }
+
+.ctrl-panel {
+  background: rgba(6,8,5,.95); border: 1px solid var(--amber); border-radius: 0;
+  font-family: var(--mono); box-shadow: 0 0 0 1px #000, 0 0 24px var(--amber-dim);
+}
+.ctrl-row label { text-transform: uppercase; letter-spacing: .08em; font-size: .68rem; color: var(--text-btn); }
+.ctrl-tog, .ctrl-seg, .ctrl-mini, .ctrl-more, .ctrl-input { border-radius: 0; font-family: var(--mono); }
+.ctrl-tog.on, .ctrl-seg.on { background: var(--amber); color: #0a0a00; }
+.ctrl-panel input[type=range] { accent-color: var(--amber); }
+
+.cam-wrap.alerting { outline: 2px solid var(--amber); }
+.cam-wrap.alerting.ai { outline: 2px solid #ff3b30; box-shadow: 0 0 26px rgba(255,59,48,.5); }
+.cam-wrap.alerting.ai::before, .cam-wrap.alerting.ai::after { border-color: #ff3b30; opacity: 1; }
+.detect-badge { top: 34px; left: 30px; border-radius: 0; font-family: var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+
+#theme-btn { display: none !important; }   /* light mode is Classic-only */

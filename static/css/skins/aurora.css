@@ -1,0 +1,84 @@
+/*
+ * Version: 1.0
+ * Updated: 2026-10-11
+ *
+ * v1.0 - 2026-10-11 - "Aurora" skin: sleek graphite, violet-to-blue gradients, soft depth
+ */
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
+
+/* Skins are dark designs: keep their palette even if light mode was on. */
+:root, .light {
+  --bg: #0b0c10; --surface: rgba(22,23,30,.82); --surface2: rgba(255,255,255,.06);
+  --border: rgba(255,255,255,.07); --border2: rgba(255,255,255,.12);
+  --text: #f2f2f7; --text-muted: #8a8a99; --text-btn: #c9c9d6; --cam-bg: #08080b;
+  --grad: linear-gradient(135deg, #8b5cf6 0%, #6366f1 45%, #3b82f6 100%);
+}
+body {
+  font-family: Inter, system-ui, -apple-system, sans-serif;
+  background: radial-gradient(1000px 520px at 50% -20%, rgba(139,92,246,.22), transparent 65%), var(--bg);
+}
+header {
+  background: var(--surface); backdrop-filter: blur(20px) saturate(140%);
+  border-bottom: 1px solid var(--border); padding: 10px 18px;
+}
+header h1 img { filter: drop-shadow(0 0 10px rgba(139,92,246,.45)); }
+
+#stream-btns, #layout-btns { background: rgba(255,255,255,.05); padding: 3px; border-radius: 11px; gap: 2px; }
+#stream-btns button, #layout-btns button {
+  background: transparent; border: none; color: var(--text-btn);
+  border-radius: 8px; padding: 5px 12px; font-weight: 500;
+}
+#stream-btns button:hover, #layout-btns button:hover { background: rgba(255,255,255,.08); color: #fff; }
+#stream-btns button.active, #layout-btns button.active, #nav-btns button.active {
+  background: var(--grad); color: #fff; box-shadow: 0 4px 14px rgba(99,102,241,.45);
+}
+#nav-btns button, #settings-btn, #theme-btn, #fullscreen-grid-btn, #labels-btn, #keeplive-btn, #chime-btn {
+  background: rgba(255,255,255,.05); border: 1px solid var(--border2);
+  border-radius: 10px; color: var(--text-btn); transition: all .2s;
+}
+#settings-btn:hover, #theme-btn:hover, #fullscreen-grid-btn:hover, #labels-btn:hover,
+#keeplive-btn:hover, #chime-btn:hover, #nav-btns button:hover {
+  background: rgba(255,255,255,.1); color: #fff; border-color: rgba(255,255,255,.25);
+}
+#keeplive-btn.active, #chime-btn.active { background: var(--grad); color: #fff; border-color: transparent; }
+
+#grid { gap: 10px; padding: 10px; }
+.cam-wrap {
+  border-radius: 16px; border: 1px solid var(--border);
+  box-shadow: 0 1px 0 rgba(255,255,255,.04) inset, 0 12px 32px rgba(0,0,0,.55);
+  transition: transform .3s cubic-bezier(.2,.8,.2,1), box-shadow .3s;
+}
+.cam-wrap:hover { transform: translateY(-2px); box-shadow: 0 0 0 1px rgba(139,92,246,.45), 0 18px 40px rgba(0,0,0,.6); }
+.cam-wrap::after {   /* bottom vignette so overlaid controls stay readable */
+  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 30%;
+  background: linear-gradient(transparent, rgba(0,0,0,.5)); pointer-events: none; z-index: 1;
+}
+
+.cam-label {
+  background: rgba(15,15,20,.55); backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,.12); border-radius: 10px;
+  font-size: .74rem; font-weight: 600; padding: 4px 10px;
+}
+.ptz-badge { background: var(--grad); border-radius: 8px; box-shadow: 0 4px 12px rgba(99,102,241,.5); }
+
+.preset-btn, .calib-btn, .ctrl-btn {
+  background: rgba(15,15,20,.6); backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,.14); border-radius: 9px; color: #e7e7f0; font-weight: 500;
+}
+.preset-btn:hover, .calib-btn:hover, .ctrl-btn:hover { background: var(--grad); border-color: transparent; color: #fff; }
+.calib-btn.active, .ctrl-btn.active { background: var(--grad); border-color: transparent; }
+
+.ctrl-panel {
+  background: rgba(20,20,28,.85); backdrop-filter: blur(24px) saturate(150%);
+  border: 1px solid rgba(255,255,255,.12); border-radius: 16px;
+  box-shadow: 0 24px 50px rgba(0,0,0,.6);
+}
+.ctrl-tog, .ctrl-seg { border-radius: 8px; }
+.ctrl-tog.on, .ctrl-seg.on { background: var(--grad); }
+.ctrl-panel input[type=range] { accent-color: #8b5cf6; }
+
+.cam-wrap.alerting { outline: none; box-shadow: 0 0 0 2px #f59e0b, 0 0 30px rgba(245,158,11,.45); }
+.cam-wrap.alerting.ai { box-shadow: 0 0 0 2px #f43f5e, 0 0 34px rgba(244,63,94,.55); }
+.detect-badge { top: 38px; border-radius: 9px; }
+
+#theme-btn { display: none !important; }   /* light mode is Classic-only */

@@ -1,8 +1,9 @@
 //
-// Version: 1.0
+// Version: 1.1
 // Updated: 2026-10-11
 //
 // v1.0 - 2026-10-11 - Split out of index.html: Server-offline overlay, go2rtc health, init, mobile UI
+// v1.1 - 2026-10-11 - ?ui=desktop forces the desktop layout (tablets, previews)
 //
 // Loaded as a classic script (shared global scope) in the order listed in
 // index.html. Don't convert to an ES module without resolving globals.
@@ -278,6 +279,7 @@ function applyMobileUI() {
 (function detectMobile() {
   // In standalone (app window / PWA) mode, always use the desktop UI layout
   if (window.matchMedia('(display-mode: standalone)').matches) return;
+  if (new URLSearchParams(location.search).get('ui') === 'desktop') return;   // force desktop layout
   const isMobile = 'ontouchstart' in window
     || navigator.maxTouchPoints > 0
     || window.screen.width < 1200

@@ -1,0 +1,99 @@
+/*
+ * Version: 1.0
+ * Updated: 2026-10-11
+ *
+ * v1.0 - 2026-10-11 - "Command Centre" skin: deep navy, glass panels, cyan glow
+ */
+/* Skins are dark designs: keep their palette even if light mode was on. */
+:root, .light {
+  --bg: #04060c; --surface: rgba(12,18,32,.72); --surface2: rgba(255,255,255,.05);
+  --border: rgba(34,211,238,.14); --border2: rgba(34,211,238,.22);
+  --text: #e6f6ff; --text-muted: #6b8aa6; --text-btn: #9fd9ee; --cam-bg: #020409;
+  --accent: #22d3ee; --accent-2: #3b82f6; --glow: 0 0 12px rgba(34,211,238,.55);
+}
+body {
+  background:
+    radial-gradient(1200px 600px at 15% -10%, rgba(59,130,246,.18), transparent 60%),
+    radial-gradient(900px 500px at 110% 110%, rgba(34,211,238,.12), transparent 60%),
+    var(--bg);
+}
+
+header {
+  background: var(--surface); backdrop-filter: blur(14px);
+  border-bottom: 1px solid transparent;
+  border-image: linear-gradient(90deg, transparent, var(--accent), var(--accent-2), transparent) 1;
+  box-shadow: 0 6px 24px rgba(0,0,0,.45);
+}
+
+#stream-btns button, #layout-btns button, #nav-btns button,
+#settings-btn, #theme-btn, #fullscreen-grid-btn, #labels-btn, #keeplive-btn, #chime-btn {
+  background: rgba(255,255,255,.04); border: 1px solid var(--border2);
+  color: var(--text-btn); border-radius: 8px; transition: all .2s;
+}
+#stream-btns button:hover, #layout-btns button:hover, #nav-btns button:hover,
+#settings-btn:hover, #theme-btn:hover, #fullscreen-grid-btn:hover, #labels-btn:hover,
+#keeplive-btn:hover, #chime-btn:hover {
+  background: rgba(34,211,238,.12); color: #fff; border-color: var(--accent); box-shadow: var(--glow);
+}
+#stream-btns button.active, #layout-btns button.active, #nav-btns button.active,
+#keeplive-btn.active, #chime-btn.active {
+  background: linear-gradient(135deg, var(--accent-2), var(--accent)); color: #021018;
+  border-color: transparent; box-shadow: var(--glow); font-weight: 700;
+}
+
+#grid { gap: 8px; padding: 8px; }
+.cam-wrap {
+  border-radius: 12px; border: 1px solid var(--border);
+  box-shadow: 0 0 0 1px rgba(0,0,0,.6), 0 10px 30px rgba(0,0,0,.5);
+  transition: border-color .25s, box-shadow .25s, transform .25s;
+}
+.cam-wrap:hover {
+  border-color: rgba(34,211,238,.55);
+  box-shadow: 0 0 0 1px rgba(34,211,238,.35), 0 0 22px rgba(34,211,238,.25), 0 10px 30px rgba(0,0,0,.5);
+}
+/* Faint scan sheen across each tile */
+.cam-wrap::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 1;
+  background: linear-gradient(180deg, rgba(255,255,255,.05), transparent 18%, transparent 82%, rgba(0,0,0,.35));
+}
+
+.cam-label {
+  background: rgba(4,10,20,.66); backdrop-filter: blur(8px);
+  border: 1px solid var(--border2); border-radius: 999px;
+  color: #dff7ff; font-size: .68rem; font-weight: 600; letter-spacing: .06em;
+  text-transform: uppercase; padding: 4px 10px 4px 22px;
+}
+.cam-label::before {   /* pulsing live dot */
+  content: ""; position: absolute; left: 9px; top: 50%; width: 7px; height: 7px;
+  margin-top: -3.5px; border-radius: 50%; background: #34d399;
+  box-shadow: 0 0 8px #34d399; animation: skin-live 1.8s ease-in-out infinite;
+}
+@keyframes skin-live { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+
+.ptz-badge {
+  background: linear-gradient(135deg, var(--accent-2), var(--accent)); color: #021018;
+  border-radius: 999px; box-shadow: var(--glow);
+}
+.preset-btn, .calib-btn, .ctrl-btn {
+  background: rgba(4,10,20,.7); backdrop-filter: blur(8px);
+  border: 1px solid var(--border2); border-radius: 8px; color: #bfeefc;
+}
+.preset-btn:hover, .calib-btn:hover, .ctrl-btn:hover {
+  background: rgba(34,211,238,.18); border-color: var(--accent); color: #fff; box-shadow: var(--glow);
+}
+.calib-btn.active, .ctrl-btn.active { background: var(--accent); color: #021018; box-shadow: var(--glow); }
+
+.ctrl-panel {
+  background: rgba(6,12,24,.86); backdrop-filter: blur(16px);
+  border: 1px solid rgba(34,211,238,.35); border-radius: 14px;
+  box-shadow: 0 0 30px rgba(34,211,238,.18), 0 18px 40px rgba(0,0,0,.6);
+}
+.ctrl-tog.on, .ctrl-seg.on { background: linear-gradient(135deg, var(--accent-2), var(--accent)); color: #021018; }
+
+.cam-wrap.alerting { outline: none; border-color: #f59e0b;
+  box-shadow: 0 0 0 2px #f59e0b, 0 0 28px rgba(245,158,11,.5); }
+.cam-wrap.alerting.ai { border-color: #ef4444;
+  box-shadow: 0 0 0 2px #ef4444, 0 0 32px rgba(239,68,68,.6); }
+.detect-badge { top: 36px; border-radius: 999px; box-shadow: 0 0 14px rgba(239,68,68,.7); }
+
+#theme-btn { display: none !important; }   /* light mode is Classic-only */

@@ -11,6 +11,19 @@
     customElements.define('video-rtc', VideoRTC);
   </script>
   <link rel="stylesheet" href="css/index.css">
+  <script>
+    // Visual skin layered over index.css: ?skin=<name> (preview) or the saved choice.
+    // Written during head parsing so it applies before first paint (no flash).
+    (function () {
+      var skins = ['neon', 'aurora', 'tactical'];
+      var s = new URLSearchParams(location.search).get('skin');
+      try { if (s === null) s = localStorage.getItem('skin'); } catch (e) {}
+      if (s === null) s = 'neon';          // default skin; 'classic' = no skin
+      if (skins.indexOf(s) >= 0) {
+        document.write('<link rel="stylesheet" id="skin-css" href="css/skins/' + s + '.css">');
+      }
+    })();
+  </script>
 </head>
 <body>
 <script>
@@ -18,6 +31,7 @@
     function checkMobile() {
       // In standalone (app window) mode the page is always a desktop context — skip mobile class
       if (window.matchMedia('(display-mode: standalone)').matches) return;
+      if (new URLSearchParams(location.search).get('ui') === 'desktop') return;
       const touch  = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
       const narrow = window.innerWidth <= 900 || window.screen.width <= 1100;
       document.body.classList.toggle('mobile', touch || narrow);
