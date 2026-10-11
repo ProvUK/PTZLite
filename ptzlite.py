@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Version: 5.43
+# Version: 5.44
 # Updated: 2026-10-11
 # v1.0 - 2026-04-28 - Initial stable release: go2rtc streaming, PTZ click-to-centre,
 #                     sequential pan+tilt, optical zoom, presets, serialized NVR API
@@ -162,6 +162,7 @@
 # v5.41 - 2026-10-11 - Register detection SSE router; close shared camera HTTP session on shutdown
 # v5.42 - 2026-10-11 - Readable JSON errors for camera login failures, timeouts, unreachable cameras
 # v5.43 - 2026-10-11 - Cache-Control: no-cache for html/js/css (viewer split into static/js + css)
+# v5.44 - 2026-10-11 - Login redirect carries ?next= so you return to the page you asked for
 """
 Reolink camera viewer with click-to-pan PTZ control.
 
@@ -184,6 +185,7 @@ import time
 import urllib.request
 import webbrowser
 from pathlib import Path
+from urllib.parse import quote
 
 import aiohttp
 import uvicorn
@@ -235,7 +237,8 @@ async def auth_middleware(request: Request, call_next):
     p = request.url.path
     if p not in _AUTH_EXEMPT and not is_authenticated(request):
         if p == "/" or p.endswith(".html"):
-            return RedirectResponse("/login.html")
+            target = p + (f"?{request.url.query}" if request.url.query else "")
+            return RedirectResponse("/login.html?next=" + quote(target, safe=""))
         return JSONResponse({"detail": "Not authenticated"}, status_code=401)
     response = await call_next(request)
     # Revalidate app code on every load (cheap ETag check) so an update is never

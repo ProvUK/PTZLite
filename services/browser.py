@@ -1,8 +1,9 @@
 #
-# Version: 1.0
-# Updated: 2026-05-21
+# Version: 1.1
+# Updated: 2026-10-11
 #
 # v1.0 - 2026-05-21 - Browser detection and app-window launcher extracted from ptzlite.py
+# v1.1 - 2026-10-11 - Launch URL carries a build stamp so a stale cached page is never reused
 #
 
 import logging
@@ -12,7 +13,7 @@ import webbrowser
 from pathlib import Path
 
 from core.config import _config
-from core.paths import BASE
+from core.paths import BASE, _STATIC_DIR
 
 logger = logging.getLogger("PTZLite.services.browser")
 
@@ -46,7 +47,13 @@ def open_viewer(port: int) -> None:
     A dedicated --user-data-dir keeps the profile separate from the user's main
     browser, ensuring the app window size is remembered between sessions.
     """
-    url = f"http://localhost:{port}"
+    # Build stamp in the URL: a new build means a new address, so the browser can't
+    # serve an old cached copy of the page (which once caused "stream offline").
+    try:
+        stamp = int((_STATIC_DIR / "index.html").stat().st_mtime)
+    except OSError:
+        stamp = 0
+    url = f"http://localhost:{port}/?v={stamp}"
     if _config.get("app_window", False):
         browser = find_app_browser()
         if browser:

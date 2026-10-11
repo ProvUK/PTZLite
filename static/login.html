@@ -134,7 +134,9 @@
       });
       if (r.ok) {
         const params = new URLSearchParams(location.search);
-        location.href = params.get('next') || '/';
+        // Only follow a same-site path (not //evil.com or a full URL).
+        const next = params.get('next') || '/';
+        location.href = (next.startsWith('/') && !next.startsWith('//')) ? next : '/';
       } else {
         err.textContent = 'Wrong password — try again';
         document.getElementById('pw').select();

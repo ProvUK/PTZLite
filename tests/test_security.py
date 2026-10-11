@@ -1,9 +1,10 @@
 #
-# Version: 1.1
+# Version: 1.2
 # Updated: 2026-10-11
 #
 # v1.0 - 2026-10-11 - Auth middleware, password masking, go2rtc proxy lockdown
 # v1.1 - 2026-10-11 - Session persistence + password-change sign-out
+# v1.2 - 2026-10-11 - Login redirect keeps next=
 #
 import pytest
 from starlette.websockets import WebSocketDisconnect
@@ -39,7 +40,12 @@ def test_reads_require_login(client, password, path):
 def test_page_load_redirects_to_login(client, password):
     r = client.get("/", follow_redirects=False)
     assert r.status_code in (302, 307)
-    assert r.headers["location"] == "/login.html"
+    assert r.headers["location"] == "/login.html?next=%2F"
+
+
+def test_login_redirect_keeps_query(client, password):
+    r = client.get("/?v=123", follow_redirects=False)
+    assert r.headers["location"] == "/login.html?next=%2F%3Fv%3D123"
 
 
 @pytest.mark.parametrize("path", ["/login.html", "/main-logo.png", "/api/auth/status"])
