@@ -1,11 +1,12 @@
 //
-// Version: 1.3
+// Version: 1.4
 // Updated: 2026-10-11
 //
 // v1.0 - 2026-10-11 - Split out of index.html: Server-offline overlay, go2rtc health, init, mobile UI
 // v1.1 - 2026-10-11 - ?ui=desktop forces the desktop layout (tablets, previews)
 // v1.2 - 2026-10-11 - Mobile: chime button moves into the menu
 // v1.3 - 2026-10-11 - Mobile: body.mob-ui class; bottom bar hideable for phone landscape
+// v1.4 - 2026-10-11 - Phone landscape: first tap goes truly fullscreen; upright exits
 //
 // Loaded as a classic script (shared global scope) in the order listed in
 // index.html. Don't convert to an ES module without resolving globals.
@@ -278,6 +279,26 @@ function applyMobileUI() {
     b.style.padding = '5px 12px'; b.style.fontSize = '0.8rem';
   });
 }
+
+// Phone sideways: the first tap on the video goes truly fullscreen (hides the browser's
+// own bars — a page can't do this without a tap). Turning upright leaves fullscreen.
+// Same query as the phone-landscape CSS in index.css.
+const _phoneLandscape = window.matchMedia('(orientation: landscape) and (max-height: 540px)');
+let _landscapeFs = false;
+document.addEventListener('pointerup', e => {
+  if (!window._isMobile || !_phoneLandscape.matches) return;
+  if (document.fullscreenElement || !document.documentElement.requestFullscreen) return;
+  if (e.target.closest('button, a, input, select, .ctrl-panel')) return;   // let controls work normally
+  document.documentElement.requestFullscreen({ navigationUI: 'hide' })
+    .then(() => { _landscapeFs = true; }).catch(() => {});
+}, true);
+_phoneLandscape.addEventListener('change', e => {
+  if (e.matches) return;
+  if (_landscapeFs && document.fullscreenElement === document.documentElement) {
+    document.exitFullscreen().catch(() => {});
+  }
+  _landscapeFs = false;
+});
 
 (function detectMobile() {
   // In standalone (app window / PWA) mode, always use the desktop UI layout
