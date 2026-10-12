@@ -1,9 +1,10 @@
 #
-# Version: 1.1
+# Version: 1.2
 # Updated: 2026-10-12
 #
 # v1.0 - 2026-05-18 - Initial extraction from ptzlite.py monolith
 # v1.1 - 2026-10-12 - go2rtc.exe found in bin\ or project root; APP_VERSION 5.45 (single source)
+# v1.2 - 2026-10-12 - APP_VERSION 5.46 (disclaimer accept page, no Google Fonts)
 #
 
 import sys
@@ -32,4 +33,4 @@ _STATIC_DIR = _BUNDLE_DIR / "static"
 
 # The app's release version — the one place to change it. Shown in the viewer and
 # About page, logged at startup, and stamped on the installer by build.bat.
-APP_VERSION = "5.45"
+APP_VERSION = "5.46"
