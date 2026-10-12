@@ -1,8 +1,9 @@
 #
-# Version: 1.0
-# Updated: 2026-05-18
+# Version: 1.1
+# Updated: 2026-10-12
 #
 # v1.0 - 2026-05-18 - Initial extraction from ptzlite.py monolith
+# v1.1 - 2026-10-12 - go2rtc.exe found in bin\ or project root; APP_VERSION 5.45 (single source)
 #
 
 import sys
@@ -20,9 +21,15 @@ else:
 
 BASE        = _USER_DIR
 CONFIG_PATH = BASE / "config.yaml"
-# go2rtc.exe is a bundled read-only binary — use _BUNDLE_DIR (sys._MEIPASS) when frozen
+# go2rtc.exe is a bundled read-only binary — use _BUNDLE_DIR (sys._MEIPASS) when frozen.
+# From source, bin\go2rtc.exe or go2rtc.exe in the project root both work (the build
+# scripts take it from the root and bundle it into bin\).
 GO2RTC_BIN  = _BUNDLE_DIR / "bin" / "go2rtc.exe"
+if not GO2RTC_BIN.exists() and (_BUNDLE_DIR / "go2rtc.exe").exists():
+    GO2RTC_BIN = _BUNDLE_DIR / "go2rtc.exe"
 GO2RTC_PORT = 1984
 _STATIC_DIR = _BUNDLE_DIR / "static"
 
-APP_VERSION = "5.33"
+# The app's release version — the one place to change it. Shown in the viewer and
+# About page, logged at startup, and stamped on the installer by build.bat.
+APP_VERSION = "5.45"

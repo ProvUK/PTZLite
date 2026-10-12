@@ -8,7 +8,7 @@
 
 ---
 
-PTZLite runs quietly in your system tray and shows all your cameras in one low-latency grid. It talks to **Reolink**, **Dahua** and other **ONVIF** cameras directly over your local network: no cloud, no account, nothing leaves your network.
+PTZLite runs quietly in your system tray and shows all your cameras in one low-latency grid. It talks to **Reolink** and **Dahua** cameras and NVRs directly over your local network: no cloud, no account, nothing leaves your network.
 
 Video is handled by the excellent [go2rtc](https://github.com/AlexxIT/go2rtc) (RTSP → WebRTC/MSE, no transcoding), and the viewer is a web page, so you can open it from the PC app window **or** from any phone, tablet or browser on your network.
 
@@ -74,12 +74,11 @@ Video is handled by the excellent [go2rtc](https://github.com/AlexxIT/go2rtc) (R
 | Brand | Video | PTZ / click-to-centre | Extras |
 |---|---|---|---|
 | **Reolink** (cameras, NVRs, Home Hub) | RTSP | Reolink HTTP API, timed moves + calibration | Presets, zoom, talk, lights, siren, patrol, guard, tracking, detection |
-| **Dahua** (cameras, NVRs) | RTSP | Absolute positioning (exact), falls back to ONVIF | Presets, zoom |
-| **Other ONVIF** (Hikvision, etc.) | RTSP | ONVIF ContinuousMove, timed moves + calibration | Presets, zoom |
+| **Dahua** (cameras, NVRs) | RTSP | Absolute positioning (exact), falls back to ONVIF timed moves | Presets, zoom |
 
-Reolink and Dahua are chosen in the Settings page. For another ONVIF camera, add it as Dahua and
-then change `brand: dahua` to `brand: onvif` in `config.yaml` (any brand other than `reolink` uses
-ONVIF for PTZ; `dahua` additionally tries Dahua's exact positioning first).
+Other brands (Hikvision, Amcrest, etc.) aren't supported yet: their RTSP stream address uses a
+different format, so they won't show video. **Scan network** may still list them, as it finds any
+ONVIF device.
 
 ## Requirements
 
@@ -100,8 +99,7 @@ To run from source or build it yourself you also need:
 
 ### Option 1 — Windows installer (recommended)
 
-1. Download **`PTZLite Setup.exe`** from the [Releases](https://github.com/ProvUK/PTZLite/releases) page.
-   *(If there's no release yet, build it with [Option 3](#option-3--build-the-installer-yourself).)*
+1. Download **`PTZLite Setup.exe`** from the latest [release](https://github.com/ProvUK/PTZLite/releases/latest).
 2. Run it. No admin rights are needed: PTZLite installs per-user to
    `%LOCALAPPDATA%\Programs\PTZLite`.
 3. Optionally tick **Create a desktop shortcut** and **Start automatically with Windows**.
@@ -127,11 +125,8 @@ python -m venv .venv
 # 3. Install the Python dependencies
 pip install -r requirements.txt
 
-# 4. Put go2rtc where the app expects it (see note below)
-#    Download go2rtc_win64.zip from https://github.com/AlexxIT/go2rtc/releases,
-#    extract go2rtc.exe into this folder, then:
-mkdir bin
-copy go2rtc.exe bin\go2rtc.exe
+# 4. Get go2rtc: download go2rtc_win64.zip from
+#    https://github.com/AlexxIT/go2rtc/releases and extract go2rtc.exe into this folder
 
 # 5. Create your config from the example
 copy config.example.yaml config.yaml
@@ -142,9 +137,7 @@ python ptzlite.py
 
 The viewer opens at **http://localhost:8765**. Add cameras from **Settings** (gear icon), or edit `config.yaml` directly.
 
-> **go2rtc location:** when running from source the app looks for `bin\go2rtc.exe`; the build scripts
-> look for `go2rtc.exe` in the project root (they bundle it into `bin\`). Keeping a copy in both places
-> lets you do either. Both are ignored by Git.
+> `go2rtc.exe` can sit in the project folder or in a `bin\` subfolder; it isn't stored in Git.
 
 > **PowerShell says scripts are disabled?** Run
 > `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` once, or activate the venv from
@@ -172,7 +165,7 @@ Without Inno Setup you can run the build directly: `dist\PTZLite\PTZLite.exe` (c
 
 1. PTZLite starts in the **system tray** and opens the viewer. The grid is empty until you add cameras.
 2. Click **Settings** (gear icon, top right) → **Add camera** and fill in:
-   - **Brand**: Reolink or Dahua (see [Supported cameras](#supported-cameras) for other ONVIF cameras)
+   - **Brand**: Reolink or Dahua
    - **IP**: the camera's (or NVR/Hub's) IP address
    - **Port**: management port, usually **443** (HTTPS) or **80**
    - **Username / password**: the camera's login
@@ -241,7 +234,7 @@ All settings can be changed in the **Settings** page; they're stored in `config.
 |---|---|---|
 | `id` | — | Unique short name used in URLs (e.g. `front_door`) |
 | `name` | — | Display name |
-| `brand` | `reolink` | `reolink`, `dahua`, or `onvif` for other ONVIF cameras |
+| `brand` | `reolink` | `reolink` or `dahua` |
 | `ip` / `port` | — / `443` | Camera or NVR address and management port |
 | `username` / `password` | — | Camera login |
 | `channel` | `0` | Reolink 0-based, Dahua 1-based |
@@ -337,6 +330,10 @@ devbuild.bat          Quick PyInstaller rebuild for testing
 **Branches:** `main` is the stable release branch; day-to-day work happens on `dev` and is merged
 into `main` when tested.
 
+**Version:** the release number lives in one place, `APP_VERSION` in [`core/paths.py`](core/paths.py).
+It's shown in the viewer and About page, written to the log at startup, and stamped on the installer
+by `build.bat`. Releases are tagged `v<version>` on GitHub.
+
 ## Credits
 
 - [go2rtc](https://github.com/AlexxIT/go2rtc) by AlexxIT: the streaming engine that makes this possible
@@ -345,3 +342,12 @@ into `main` when tested.
 
 Reolink and Dahua are trademarks of their respective owners. PTZLite is an independent project and is
 not affiliated with or endorsed by either company.
+
+## License
+
+Copyright © 2026 ProvUK. **All rights reserved.** The source is published here for reference only; see
+[LICENSE](LICENSE). You may install and use the released PTZLite installer for your own cameras, but
+you may not copy, modify or redistribute the code without written permission.
+
+Third-party components bundled with PTZLite keep their own licences; see
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

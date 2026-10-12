@@ -58,7 +58,13 @@ if "%ISCC%"=="" (
     pause & exit /b 0
 )
 
-"%ISCC%" installer.iss
+rem Stamp the installer with the app's version (single source: core\paths.py)
+set "APPVER="
+for /f "delims=" %%v in ('"%PYTHON%" -c "from core.paths import APP_VERSION; print(APP_VERSION)"') do set "APPVER=%%v"
+if "%APPVER%"=="" ( echo Could not read APP_VERSION from core\paths.py & pause & exit /b 1 )
+echo Version: %APPVER%
+
+"%ISCC%" /DAppVersion=%APPVER% installer.iss
 if errorlevel 1 ( echo Inno Setup failed & pause & exit /b 1 )
 
 echo.

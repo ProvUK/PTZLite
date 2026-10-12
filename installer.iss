@@ -1,5 +1,9 @@
 #define AppName    "PTZLite"
-#define AppVersion "5.26"
+; The version comes from APP_VERSION in core\paths.py — build.bat passes it in as
+; /DAppVersion=x.y. "dev" only appears if ISCC is run by hand without it.
+#ifndef AppVersion
+  #define AppVersion "dev"
+#endif
 #define AppExe     "PTZLite.exe"
 
 [Setup]
@@ -31,6 +35,9 @@ Name: "startup";     Description: "Start automatically &with Windows";      Grou
 [Files]
 ; Entire PyInstaller output folder — recurse so all DLLs and the static/ tree are included
 Source: "dist\PTZLite\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; Licence and third-party notices (go2rtc's MIT licence must ship with it)
+Source: "LICENSE";                 DestDir: "{app}"; DestName: "LICENSE.txt"; Flags: ignoreversion
+Source: "THIRD_PARTY_NOTICES.md";  DestDir: "{app}"; Flags: ignoreversion
 ; Ship config.example.yaml as config.yaml on first install only — never overwrite existing config
 Source: "config.example.yaml"; DestDir: "{app}"; DestName: "config.yaml"; Flags: onlyifdoesntexist uninsneveruninstall
 

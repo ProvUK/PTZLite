@@ -154,7 +154,7 @@
     <a href="#reolink">Reolink cameras</a>
     <a href="#reolink-hub">Reolink Home Hub Pro</a>
     <a href="#dahua">Dahua cameras</a>
-    <a href="#onvif">Other ONVIF cameras</a>
+    <a href="#onvif">Other camera brands</a>
     <a href="#manage-cameras">Managing cameras</a>
 
     <div class="section-label">Live Viewing</div>
@@ -296,7 +296,7 @@
         <tr><td>Camera ID</td><td>A unique internal identifier using letters, numbers and underscores. Auto-filled from the name. Used in URLs — keep it short and simple.</td></tr>
         <tr><td>Page / Group</td><td>Optional. Assigns this camera to a named page in the viewer. Cameras on the same page are shown together. See <a href="#pages-groups">Pages &amp; groups</a>.</td></tr>
         <tr><td>Fill frame</td><td>Forces the video to fill the tile by cropping the edges rather than letterboxing. Useful for portrait or non-16:9 cameras such as doorbells. See <a href="#crop-mode">Fill frame</a>.</td></tr>
-        <tr><td>Brand / Protocol</td><td>Controls which PTZ command protocol is used. <strong>Reolink</strong> uses the native Reolink HTTP API. <strong>Dahua</strong> uses ONVIF with CGI absolute positioning. <strong>ONVIF</strong> uses standard ONVIF ContinuousMove.</td></tr>
+        <tr><td>Brand / Protocol</td><td>Controls which PTZ command protocol is used. <strong>Reolink</strong> uses the native Reolink HTTP API. <strong>Dahua</strong> uses CGI absolute positioning, falling back to ONVIF. It also sets the stream address format, so pick the brand that matches the camera or NVR.</td></tr>
         <tr><td>IP address</td><td>The local network IP of the camera or NVR (e.g. <code>192.168.0.100</code>).</td></tr>
         <tr><td>Management port</td><td>The HTTP port used for the PTZ API. Default is 443 for Reolink, 80 or 443 for Dahua. This is <em>not</em> the RTSP port (554).</td></tr>
         <tr><td>Username / Password</td><td>Camera login credentials — usually <code>admin</code> / your camera password.</td></tr>
@@ -383,10 +383,10 @@
     </div>
 
     <div class="section" id="onvif">
-      <h2>Other ONVIF cameras</h2>
-      <p>Any ONVIF-compatible camera can be added for live streaming alongside Reolink and Dahua cameras. Set <strong>Brand</strong> to <strong>ONVIF</strong>.</p>
-      <p>PTZ support uses the ONVIF <strong>ContinuousMove</strong> command for joystick control and <strong>timed movement</strong> for click-to-centre. Results vary by camera — not all cameras implement the full ONVIF PTZ profile.</p>
-      <div class="warn"><strong>Note:</strong> Click-to-centre accuracy for ONVIF cameras depends on the <strong>Camera rotation speed (°/s)</strong> setting being correctly tuned. Cameras that do not report their position via ONVIF use timed movement estimates which may under- or over-shoot until the speed value is calibrated.</div>
+      <h2>Other camera brands</h2>
+      <p>PTZLite currently supports <strong>Reolink</strong> and <strong>Dahua</strong> cameras and NVRs. Other brands (Hikvision, Amcrest, etc.) aren't supported yet: their video stream uses a different address format, so they won't show a picture even though <strong>Scan network</strong> can find them.</p>
+      <p>When a Dahua camera can't use exact positioning, PTZ falls back to standard ONVIF: <strong>ContinuousMove</strong> for the joystick and <strong>timed movement</strong> for click-to-centre.</p>
+      <div class="warn"><strong>Note:</strong> Timed click-to-centre accuracy depends on the <strong>Camera rotation speed (°/s)</strong> setting being correctly tuned. Run calibration if moves under- or over-shoot.</div>
     </div>
 
     <div class="section" id="manage-cameras">
@@ -502,7 +502,7 @@
       <ul>
         <li><strong>Reolink:</strong> Timed open-loop movement. The click position is converted to a pan/tilt angle using the configured FoV. The camera is driven for a calculated duration based on the rotation speed setting, then stopped. Pan moves first, then tilt (some cameras ignore diagonal commands). The click is measured against the picture itself (ignoring black bars and allowing for digital zoom), and a double-click made while the camera is still moving is carried out as soon as that move finishes.</li>
         <li><strong>Dahua:</strong> CGI absolute positioning — the same method used by SmartPSS Lite. The current pan/tilt angle is read from the camera, the target angle is calculated, and a single absolute move command is sent. This is genuinely precise in one step.</li>
-        <li><strong>ONVIF:</strong> Timed ContinuousMove. Similar to Reolink — accuracy depends on the rotation speed setting being correctly calibrated.</li>
+        <li><strong>ONVIF fallback (Dahua):</strong> Timed ContinuousMove. Similar to Reolink — accuracy depends on the rotation speed setting being correctly calibrated.</li>
       </ul>
       <div class="tip"><strong>Tuning timed moves:</strong> If the camera consistently stops short of the target, increase <strong>Camera rotation speed (°/s)</strong>. If it over-travels, decrease it. For Dahua cameras the move is exact — if it misses, check that the camera's <code>getStatus</code> CGI is responding correctly.</div>
     </div>
@@ -578,8 +578,8 @@
       <h3>Removing the password</h3>
       <p>Leave both password fields blank and click <strong>Save password</strong> to remove password protection entirely.</p>
       <h3>Sessions</h3>
-      <p>After a successful login, a session cookie is stored in the browser. Sessions are invalidated if PTZLite is restarted — you will be prompted to log in again after a restart.</p>
-      <div class="tip"><strong>Tip:</strong> PTZLite only listens on <code>localhost</code> by default. If you want to access it from other devices on your network, ensure your firewall allows connections to port 8765.</div>
+      <p>After a successful login, a session cookie is stored in the browser and stays valid for 30 days, including across PTZLite restarts. Changing the password signs every device out. Use <strong>Log out</strong> in Settings to end a session yourself.</p>
+      <div class="tip"><strong>Tip:</strong> PTZLite accepts connections from other devices on your network on port <code>8765</code>, so you can watch from a phone or tablet. Without a password, anyone on your network can open it, so set one if others share your network. If a device can't connect, check that Windows Firewall allows PTZLite.</div>
     </div>
 
     <div class="section" id="tray-hotkey">

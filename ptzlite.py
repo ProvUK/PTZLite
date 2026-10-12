@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-# Version: 5.44
-# Updated: 2026-10-11
+# Version: 5.45
+# Updated: 2026-10-12
 # v1.0 - 2026-04-28 - Initial stable release: go2rtc streaming, PTZ click-to-centre,
 #                     sequential pan+tilt, optical zoom, presets, serialized NVR API
 # v1.1 - 2026-04-28 - Add camera management API (GET/POST/PUT/DELETE /api/cameras)
@@ -163,17 +163,18 @@
 # v5.42 - 2026-10-11 - Readable JSON errors for camera login failures, timeouts, unreachable cameras
 # v5.43 - 2026-10-11 - Cache-Control: no-cache for html/js/css (viewer split into static/js + css)
 # v5.44 - 2026-10-11 - Login redirect carries ?next= so you return to the page you asked for
+# v5.45 - 2026-10-12 - Setup notes point at README; app version now lives only in core/paths.py
 """
 Reolink camera viewer with click-to-pan PTZ control.
 
 Uses go2rtc to serve WebRTC streams directly from RTSP -- no ffmpeg per camera.
 
-Setup:
+Setup (full instructions in README.md):
     1. Download go2rtc for Windows from https://github.com/AlexxIT/go2rtc/releases
-       and place go2rtc.exe next to this file.
+       and place go2rtc.exe next to this file (or in bin\\).
     2. pip install -r requirements.txt
-    3. Edit config.yaml with your camera details.
-    4. python app.py  ->  http://localhost:8765
+    3. copy config.example.yaml config.yaml, or add cameras in Settings.
+    4. python ptzlite.py  ->  http://localhost:8765
 
 go2rtc will be started automatically and stopped when the app exits.
 """

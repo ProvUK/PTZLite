@@ -1,7 +1,7 @@
 cameras:
   - id: front_door          # unique slug used in URLs
     name: Front Door        # display name in viewer
-    brand: reolink          # reolink (default), dahua, or onvif (other ONVIF cameras)
+    brand: reolink          # reolink (default) or dahua
     ip: 192.168.0.100       # camera or NVR IP
     port: 443               # 443 for HTTPS, 80 for HTTP
     username: admin

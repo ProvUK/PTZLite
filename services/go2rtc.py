@@ -1,6 +1,6 @@
 #
-# Version: 1.6
-# Updated: 2026-10-11
+# Version: 1.7
+# Updated: 2026-10-12
 #
 # v1.0 - 2026-05-18 - Initial extraction from ptzlite.py monolith
 # v1.1 - 2026-05-20 - Fix pre-warm CPU: read first chunk only then hold via backpressure
@@ -17,6 +17,7 @@
 # v1.4 - 2026-07-28 - Register per-camera _talk stream (backchannel on) for two-way audio.
 # v1.5 - 2026-10-11 - Bind go2rtc API to 127.0.0.1 (browser goes via authenticated proxy)
 # v1.6 - 2026-10-11 - Configurable pre-warm (both/main/sub/none)
+# v1.7 - 2026-10-12 - Missing-go2rtc message names the right folders
 #
 
 import asyncio
@@ -177,7 +178,7 @@ def start_go2rtc() -> None:
         logger.error(
             "\n  ERROR: go2rtc.exe not found at %s\n"
             "  Download from https://github.com/AlexxIT/go2rtc/releases\n"
-            "  and place go2rtc.exe next to app.py",
+            "  and place go2rtc.exe in the PTZLite folder (or its bin\\ subfolder)",
             GO2RTC_BIN,
         )
         sys.exit(1)
