@@ -99,7 +99,7 @@ To run from source or build it yourself you also need:
 
 ### Option 1 — Windows installer (recommended)
 
-1. Download **`PTZLite Setup.exe`** from the latest [release](https://github.com/ProvUK/PTZLite/releases/latest).
+1. Download **`PTZLite.Setup.exe`** from the latest [release](https://github.com/ProvUK/PTZLite/releases/latest).
 2. Run it. No admin rights are needed: PTZLite installs per-user to
    `%LOCALAPPDATA%\Programs\PTZLite`.
 3. Optionally tick **Create a desktop shortcut** and **Start automatically with Windows**.
