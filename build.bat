@@ -59,8 +59,11 @@ if "%ISCC%"=="" (
 )
 
 rem Stamp the installer with the app's version (single source: core\paths.py)
+rem (via a temp file: for /f mangles a quoted python path plus quoted code)
 set "APPVER="
-for /f "delims=" %%v in ('"%PYTHON%" -c "from core.paths import APP_VERSION; print(APP_VERSION)"') do set "APPVER=%%v"
+"%PYTHON%" -c "from core.paths import APP_VERSION; print(APP_VERSION)" > "%TEMP%\ptzlite_ver.txt"
+set /p APPVER=<"%TEMP%\ptzlite_ver.txt"
+del "%TEMP%\ptzlite_ver.txt" >nul 2>&1
 if "%APPVER%"=="" ( echo Could not read APP_VERSION from core\paths.py & pause & exit /b 1 )
 echo Version: %APPVER%
 
