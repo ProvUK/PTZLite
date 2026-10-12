@@ -1,10 +1,10 @@
 /*
- * Version: 1.0
- * Updated: 2026-10-11
+ * Version: 1.1
+ * Updated: 2026-10-12
  *
  * v1.0 - 2026-10-11 - "Tactical" skin: security-ops HUD, amber accents, corner brackets
+ * v1.1 - 2026-10-12 - Drop Google Fonts (no external requests); use the device's own monospace font
  */
-@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&display=swap");
 
 /* Skins are dark designs: keep their palette even if light mode was on. */
 :root, .light {
@@ -12,7 +12,7 @@
   --border: #23291c; --border2: #2f3725;
   --text: #e8e2c8; --text-muted: #7c7a62; --text-btn: #d8c27a; --cam-bg: #030403;
   --amber: #f5b301; --amber-dim: rgba(245,179,1,.18);
-  --mono: "JetBrains Mono", Consolas, "Courier New", monospace;
+  --mono: "Cascadia Mono", Consolas, ui-monospace, Menlo, "Roboto Mono", "Courier New", monospace;
 }
 body { font-family: var(--mono); background: var(--bg); }
 /* Subtle scanlines over the whole UI */
