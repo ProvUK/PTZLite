@@ -1,7 +1,7 @@
 cameras:
   - id: front_door          # unique slug used in URLs
     name: Front Door        # display name in viewer
-    brand: reolink          # reolink (default) or dahua
+    brand: reolink          # reolink (default), dahua, or onvif (other ONVIF cameras)
     ip: 192.168.0.100       # camera or NVR IP
     port: 443               # 443 for HTTPS, 80 for HTTP
     username: admin
@@ -42,8 +42,8 @@ cameras:
     ptz_degrees_per_second: 20   # fallback speed for timed click-to-centre
     pan_degrees_per_second: null # optional horizontal override; null = use fallback
     tilt_degrees_per_second: null # optional vertical override; null = use fallback
-    legacy_ptz_aim: false        # true = old linear click math for easy rollback
     ptz_min_move_s: 0.1          # lower if high speed values appear to stop changing movement
+    zoom_max_x: 1                # optical zoom at full zoom-in, e.g. 4 for a 4x camera (1 = don't adjust aim)
     monitor_preset: 0       # preset ID to return to (omit or null for none)
     pan_invert: false
     tilt_invert: false
