@@ -135,8 +135,11 @@
       if (r.ok) {
         const params = new URLSearchParams(location.search);
         // Only follow a same-site path (not //evil.com or a full URL).
-        const next = params.get('next') || '/';
-        location.href = (next.startsWith('/') && !next.startsWith('//')) ? next : '/';
+        // Plain "/" gets a fresh query so a stale cached copy of the viewer is never used.
+        const home = '/?v=' + Date.now();
+        const next = params.get('next') || home;
+        const safe = (next.startsWith('/') && !next.startsWith('//')) ? next : home;
+        location.href = safe === '/' ? home : safe;
       } else {
         err.textContent = 'Wrong password — try again';
         document.getElementById('pw').select();

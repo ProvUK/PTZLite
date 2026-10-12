@@ -1,5 +1,5 @@
 #
-# Version: 1.4
+# Version: 1.5
 # Updated: 2026-10-12
 #
 # v1.0 - 2026-10-11 - RTSP URL builders and PTZ move maths
@@ -7,6 +7,7 @@
 # v1.2 - 2026-10-11 - Config load: invalid cameras preserved, retired keys stripped
 # v1.3 - 2026-10-11 - Next free preset slot; readable camera errors
 # v1.4 - 2026-10-12 - Zoom-aware aim, combined pan+tilt move, zoom calibration
+# v1.5 - 2026-10-12 - Click moves pan then tilt (no diagonal ops)
 #
 import math
 
@@ -71,15 +72,8 @@ def test_zoom_narrows_the_click_angle():
     assert pan == pytest.approx(math.degrees(math.atan(0.5)))   # edge of a 2x view
 
 
-def test_reolink_move_runs_both_axes_then_the_longer():
-    from api.ptz import _reolink_legs
-    assert _reolink_legs(1, 1, 0.8, 0.3) == [("RightUp", 0.3), ("Right", 0.8)]
-    assert _reolink_legs(-1, -1, 0.2, 0.5) == [("LeftDown", 0.2), ("Down", 0.5)]
-    assert _reolink_legs(1, 1, 0.4, 0.4) == [("RightUp", 0.4)]
-    assert _reolink_legs(0, -1, 0.0, 0.5) == [("Down", 0.5)]
-
-
-def test_click_sends_diagonal_then_stop(client, monkeypatch):
+def test_click_moves_pan_then_tilt_never_diagonal(client, monkeypatch):
+    """Some Reolinks accept diagonal ops (RightUp...) but don't move — never send them."""
     import api.ptz
     sent = []
 
@@ -94,7 +88,7 @@ def test_click_sends_diagonal_then_stop(client, monkeypatch):
     api.ptz.cameras["front_right"].update(pan_degrees_per_second=900, tilt_degrees_per_second=900,
                                           ptz_min_move_s=0.01)
     assert client.post("/ptz/front_right", json={"x": 0.95, "y": 0.6}).status_code == 200
-    assert sent == ["Stop", "RightDown", "Right", "Stop"]
+    assert sent == ["Stop", "Right", "Stop", "Down", "Stop"]
 
 
 def test_calibrate_when_zoomed_in_tunes_zoom_not_aim(client, monkeypatch):

@@ -135,7 +135,7 @@
   <div class="nav-links">
     <a href="/about.html">About</a>
     <a href="/settings.html">Settings</a>
-    <a href="/">&#8592; Back</a>
+    <a href="/" onclick="location.href='/?v='+Date.now(); return false;">&#8592; Back</a>
     <button onclick="toggleTheme()" title="Toggle theme">&#9788;</button>
   </div>
 </header>
@@ -500,7 +500,7 @@
       <p>For PTZ-enabled cameras, a single click anywhere on the video pans and tilts the camera so that the clicked point becomes the new centre of the frame.</p>
       <p>A white ripple animation confirms the target location. The camera begins moving within a fraction of a second. The technique used depends on the camera brand:</p>
       <ul>
-        <li><strong>Reolink:</strong> Timed open-loop movement. The click position is converted to a pan/tilt angle using the configured FoV. The camera is driven for a calculated duration based on the rotation speed setting, then stopped. Pan and tilt run together, so diagonal moves take no longer than the longer of the two. The click is measured against the picture itself (ignoring black bars and allowing for digital zoom), and a double-click made while the camera is still moving is carried out as soon as that move finishes.</li>
+        <li><strong>Reolink:</strong> Timed open-loop movement. The click position is converted to a pan/tilt angle using the configured FoV. The camera is driven for a calculated duration based on the rotation speed setting, then stopped. Pan moves first, then tilt (some cameras ignore diagonal commands). The click is measured against the picture itself (ignoring black bars and allowing for digital zoom), and a double-click made while the camera is still moving is carried out as soon as that move finishes.</li>
         <li><strong>Dahua:</strong> CGI absolute positioning — the same method used by SmartPSS Lite. The current pan/tilt angle is read from the camera, the target angle is calculated, and a single absolute move command is sent. This is genuinely precise in one step.</li>
         <li><strong>ONVIF:</strong> Timed ContinuousMove. Similar to Reolink — accuracy depends on the rotation speed setting being correctly calibrated.</li>
       </ul>

@@ -2,7 +2,7 @@
   "name": "PTZLite",
   "short_name": "PTZLite",
   "description": "Lightweight IP camera viewer with PTZ control",
-  "start_url": "/",
+  "start_url": "/?app=1",
   "display": "standalone",
   "background_color": "#0d0d0d",
   "theme_color": "#1e40af",

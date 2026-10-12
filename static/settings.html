@@ -251,7 +251,8 @@
   <a href="/help.html" class="back-btn" style="margin-left:auto; margin-right:8px;">Help</a>
   <a href="/about.html" class="back-btn" style="margin-left:0; margin-right:8px;">About</a>
   <button class="back-btn" style="margin-left:0; margin-right:8px;" onclick="openLogViewer()">📋 View Log</button>
-  <a href="/" class="back-btn" style="margin-left:0;">← Back to viewer</a>
+  <!-- Fresh URL each time: the app window may hold a stale copy of plain "/" from an old version -->
+  <a href="/" class="back-btn" style="margin-left:0;" onclick="location.href='/?v='+Date.now(); return false;">← Back to viewer</a>
   <button class="theme-btn" onclick="toggleTheme()" title="Toggle light/dark mode">&#9788;</button>
 </header>
 

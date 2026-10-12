@@ -1,5 +1,5 @@
 #
-# Version: 2.5
+# Version: 2.6
 # Updated: 2026-10-12
 #
 # v1.0 - 2026-05-18 - Initial extraction from ptzlite.py monolith
@@ -19,6 +19,8 @@
 # v2.4 - 2026-10-11 - Save preset picks the next free slot when no id is given
 # v2.5 - 2026-10-12 - Click-to-centre: zoom-aware aim (zoom_max_x + live zoom read),
 #                     pan+tilt move together, zoom calibration, /ptz/{id}/aim
+# v2.6 - 2026-10-12 - Revert pan+tilt-together: frontleft ignores diagonal ops (measured) —
+#                     back to pan then tilt, one axis at a time
 #
 
 import asyncio
@@ -186,10 +188,6 @@ async def _current_mag(cam: dict) -> float:
     return _zoom_mag(cam, await _zoom_fraction(cam))
 
 
-async def _sleep_until(deadline: float) -> None:
-    await asyncio.sleep(max(0.0, deadline - time.monotonic()))
-
-
 def _axis_dps(cam: dict, axis: str) -> float:
     """Return calibrated degrees-per-second for one axis, falling back to legacy field."""
     key = "pan_degrees_per_second" if axis == "pan" else "tilt_degrees_per_second"
@@ -280,38 +278,34 @@ async def ptz_click(cam_id: str, click: ClickPayload):
         ONVIF_STOP_LEAD_S = cam.get("onvif_stop_lead", 0.12)
         max_spd = cam.get("ptz_speed", 40) / 63.0
 
-        def _onvif_axis(degrees: float, axis: str) -> tuple[float, float]:
-            """(signed velocity, motor-on seconds) for one axis, or (0, 0) if no move."""
-            if abs(degrees) <= 0.5:
-                return 0.0, 0.0
+        async def _onvif_timed_axis(pan_v: float, tilt_v: float, degrees: float, axis: str):
             axis_fov = fov_h if axis == "pan" else fov_v
-            magnitude = min(1.0, abs(degrees) / (axis_fov / 2))
+            magnitude = min(1.0, degrees / (axis_fov / 2))
             spd = max(0.2, min(1.0, magnitude)) * max_spd
             duration_s = max(_min_move_s(cam),
-                             _move_duration(cam, axis, abs(degrees)) - ONVIF_STOP_LEAD_S)
-            return math.copysign(spd, degrees), duration_s
-
-        pan_v, pan_s = _onvif_axis(want_pan, "pan")
-        tilt_v, tilt_s = _onvif_axis(want_tilt, "tilt")
-        logger.info(
-            "PTZ ONVIF %s: click=(%.2f,%.2f) zoom=%.2fx pan=%.1f° (%.2fs) tilt=%.1f° (%.2fs)",
-            cam["id"], click.x, click.y, mag, want_pan, pan_s, want_tilt, tilt_s,
-        )
-        # Stop first so any in-flight joystick /start commands don't outlive this move
-        await _onvif_stop(pc)
-        if pan_s or tilt_s:
-            # Both axes run together; the shorter one drops out, the longer finishes.
-            await _onvif_continuous(pc, pan=pan_v, tilt=tilt_v)
-            t0 = time.monotonic()
-            if pan_s and tilt_s and pan_s != tilt_s:
-                await _sleep_until(t0 + min(pan_s, tilt_s))
-                if pan_s > tilt_s:
-                    await _onvif_continuous(pc, pan=pan_v)
-                else:
-                    await _onvif_continuous(pc, tilt=tilt_v)
-            await _sleep_until(t0 + max(pan_s, tilt_s))
+                             _move_duration(cam, axis, degrees) - ONVIF_STOP_LEAD_S)
+            logger.debug(
+                "  ONVIF timed: pan_v=%.2f tilt_v=%.2f spd=%.2f dur=%.2fs deg=%.1f°",
+                pan_v, tilt_v, spd, duration_s, degrees,
+            )
+            await _onvif_continuous(pc, pan=pan_v * spd, tilt=tilt_v * spd)
+            await asyncio.sleep(duration_s)
             await _onvif_stop(pc)
+
+        logger.info(
+            "PTZ ONVIF %s: click=(%.2f,%.2f) zoom=%.2fx pan=%.1f° tilt=%.1f°",
+            cam["id"], click.x, click.y, mag, want_pan, want_tilt,
+        )
+        # Stop first so any in-flight joystick /start commands don't outlive this move.
+        # Pan then tilt, one at a time: cameras can't be relied on to move both at once.
+        await _onvif_stop(pc)
+        if abs(want_pan) > 0.5:
+            await _onvif_timed_axis(1.0 if want_pan > 0 else -1.0, 0.0, abs(want_pan), "pan")
+        if abs(want_tilt) > 0.5:
+            await _onvif_timed_axis(0.0, 1.0 if want_tilt > 0 else -1.0, abs(want_tilt), "tilt")
         return {"ok": True, "mode": "onvif_timed"}
+
+    ptz_speed = cam.get("ptz_speed", 20)
 
     sx = (1 if want_pan  > 0.5 else (-1 if want_pan  < -0.5 else 0))
     sy = (1 if want_tilt > 0.5 else (-1 if want_tilt < -0.5 else 0))
@@ -321,48 +315,33 @@ async def ptz_click(cam_id: str, click: ClickPayload):
     if sx == 0 and sy == 0:
         return {"ok": True, "note": "delta too small"}
 
-    pan_s  = max(_min_move_s(cam), _move_duration(cam, "pan",  abs(want_pan)))  if sx else 0.0
-    tilt_s = max(_min_move_s(cam), _move_duration(cam, "tilt", abs(want_tilt))) if sy else 0.0
-    legs = _reolink_legs(sx, sy, pan_s, tilt_s)
+    pan_dir  = _DIR.get((sx,  0))
+    tilt_dir = _DIR.get(( 0, sy))
 
     logger.info(
-        "PTZ %s: click=(%.2f,%.2f) zoom=%.2fx want_pan=%.1f° (%.2fs) want_tilt=%.1f° (%.2fs) legs=%s",
-        cam["id"], click.x, click.y, mag, want_pan, pan_s, want_tilt, tilt_s, legs,
+        "PTZ %s: click=(%.2f,%.2f) zoom=%.2fx want_pan=%.1f° want_tilt=%.1f° pan=%s tilt=%s",
+        cam["id"], click.x, click.y, mag, want_pan, want_tilt, pan_dir, tilt_dir,
     )
 
-    # Stop first so any in-flight joystick /start commands don't outlive this move
-    await _ptz_stop(pc)
-    t0 = None
-    for op, until in legs:
-        await _nvr_call(pc, "PtzCtrl", [{"cmd": "PtzCtrl", "action": 0, "param": {
-            "channel": pc.get("channel", 0), "op": op, "speed": cam.get("ptz_speed", 20), "timeout": 0,
+    async def _timed_axis(op: str, degrees: float, axis: str):
+        duration_s = max(_min_move_s(cam), _move_duration(cam, axis, degrees))
+        resp = await _nvr_call(pc, "PtzCtrl", [{"cmd": "PtzCtrl", "action": 0, "param": {
+            "channel": pc.get("channel", 0), "op": op, "speed": ptz_speed, "timeout": 0,
         }}])
-        if t0 is None:
-            t0 = time.monotonic()   # times are measured from when the move started
-        await _sleep_until(t0 + until)
+        logger.info("  PtzCtrl %s (%.2fs): %s", op, duration_s, resp)
+        await asyncio.sleep(duration_s)
+        await _ptz_stop(pc)
+
+    # Stop first so any in-flight joystick /start commands don't outlive this move.
+    # Pan then tilt, one at a time — NOT a diagonal op: Reolink cameras accept
+    # RightUp etc. but some (e.g. frontleft) don't move at all (measured 2026-10-12).
     await _ptz_stop(pc)
+    if pan_dir:
+        await _timed_axis(pan_dir, abs(want_pan), "pan")
+    if tilt_dir:
+        await _timed_axis(tilt_dir, abs(want_tilt), "tilt")
 
     return {"ok": True, "mode": "timed"}
-
-
-def _reolink_legs(sx: int, sy: int, pan_s: float, tilt_s: float) -> list[tuple[str, float]]:
-    """Plan a timed Reolink move as [(op, run-until seconds), ...].
-
-    Pan and tilt run together (a diagonal op) until the shorter axis has had its
-    time, then the longer axis carries on alone. Each axis gets exactly the same
-    motor-on time it would get moving on its own, so calibration still applies.
-    """
-    if sx and sy:
-        both = min(pan_s, tilt_s)
-        legs = [(_DIR[(sx, sy)], both)]
-        if pan_s > both:
-            legs.append((_DIR[(sx, 0)], pan_s))
-        elif tilt_s > both:
-            legs.append((_DIR[(0, sy)], tilt_s))
-        return legs
-    if sx:
-        return [(_DIR[(sx, 0)], pan_s)]
-    return [(_DIR[(0, sy)], tilt_s)]
 
 
 @router.post("/ptz/{cam_id}/start")
