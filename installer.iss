@@ -24,6 +24,8 @@ PrivilegesRequired     = lowest
 ; Allow elevation when available so the firewall rule [Run] step can succeed
 PrivilegesRequiredOverridesAllowed = commandline dialog
 UninstallDisplayIcon   = {app}\{#AppExe}
+; Licence + "use at your own risk" disclaimer, with an "I accept" step
+LicenseFile            = LICENSE
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"

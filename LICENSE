@@ -1,6 +1,8 @@
 PTZLite
 Copyright (c) 2026 ProvUK. All rights reserved.
 
+LICENCE
+
 This software and its source code are proprietary. The source code is made
 publicly visible for reference only. No licence is granted to copy, modify,
 merge, publish, distribute, sublicense, or sell copies of the source code, or
@@ -18,9 +20,44 @@ required by the GitHub Terms of Service; doing so grants no further rights.
 Third-party components included with PTZLite are licensed under their own
 terms, which are not affected by this notice. See THIRD_PARTY_NOTICES.md.
 
+DISCLAIMER - USE AT YOUR OWN RISK
+
+1. PTZLite is a camera viewing and control tool. It is NOT a security system,
+   alarm system, monitoring service or recording system, and must not be
+   relied on to protect people, property or anything else.
+
+2. Live video, detection alerts, notifications and camera commands (including
+   movement, lights and sirens) may be delayed, inaccurate, missed or fail
+   entirely, for example because of network problems, camera firmware, or
+   errors in this software.
+
+3. You are solely responsible for your cameras and network: their passwords,
+   their security settings, who can reach PTZLite, and complying with any laws
+   that apply to recording or monitoring people and places. Do not expose
+   PTZLite directly to the internet.
+
+4. Controlling a camera (moving it, switching lights or a siren, enabling
+   features) changes the camera's behaviour and settings. You do so at your
+   own risk.
+
+5. Reolink and Dahua are trademarks of their respective owners. PTZLite is an
+   independent project and is not affiliated with, endorsed by or supported by
+   either company. Using PTZLite with a camera may be outside what the camera
+   maker supports.
+
+NO WARRANTY AND LIMITATION OF LIABILITY
+
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
-IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
-CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. TO THE FULLEST EXTENT
+PERMITTED BY LAW, IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY
+CLAIM, DAMAGES (INCLUDING LOSS OR DAMAGE TO PROPERTY, DATA OR EQUIPMENT) OR
+OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+IN THE SOFTWARE.
+
+Nothing in this notice excludes or limits liability that cannot be excluded
+or limited by law.
+
+By installing or using PTZLite you accept these terms. If you do not accept
+them, do not install or use the software.

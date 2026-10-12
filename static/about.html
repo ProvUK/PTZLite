@@ -84,8 +84,8 @@
     <h2>What it does</h2>
     <ul>
       <li>Live WebRTC streaming from multiple cameras simultaneously with low latency</li>
-      <li>Click-to-centre PTZ — single-click anywhere on the image to pan and tilt to that point</li>
-      <li>Double-click fullscreen — double left-click any camera tile to fill the screen; double right-click or Esc to exit</li>
+      <li>Click-to-centre PTZ — double-click (double-tap on a phone) anywhere on the image to pan and tilt to that point</li>
+      <li>Fullscreen — right-click any camera tile to fill the screen; right-click again or Esc to exit</li>
       <li>Joystick PTZ — click and drag for continuous directional movement; drag distance controls speed</li>
       <li>Optical zoom — hold right mouse button and scroll to drive the camera's zoom lens</li>
       <li>Digital zoom — scroll wheel magnifies the video client-side without moving the camera</li>
@@ -108,9 +108,8 @@
       <span class="badge">Reolink</span>
       <span class="badge">Reolink Home Hub Pro</span>
       <span class="badge">Dahua</span>
-      <span class="badge">ONVIF cameras</span>
     </div>
-    <p style="margin-top:12px">Reolink cameras use the native HTTP API for PTZ. Dahua cameras use the CGI API with absolute position control. Any ONVIF-compatible camera can be added for streaming; PTZ support depends on the camera's ONVIF profile.</p>
+    <p style="margin-top:12px">Reolink cameras use the native HTTP API for PTZ. Dahua cameras use the CGI API with absolute position control, falling back to ONVIF. Other brands aren't supported yet.</p>
   </div>
 
   <div class="card">
@@ -127,6 +126,13 @@
       <li>A modern browser (Chrome, Edge, Firefox) — WebRTC required</li>
       <li>No internet connection required after installation</li>
     </ul>
+  </div>
+
+  <div class="card">
+    <h2>Use at your own risk</h2>
+    <p>PTZLite is provided "as is", without warranty of any kind, and the author accepts no liability for any loss or damage arising from its use. It is a viewing and control tool, <strong>not a security or alarm system</strong>: live video, detection alerts and camera commands can be delayed, missed or fail, so don't rely on it to protect people or property.</p>
+    <p style="margin-top:10px">You're responsible for your cameras, their passwords and your network, including who can reach PTZLite. Set a password if others share your network, and never expose it directly to the internet.</p>
+    <p style="margin-top:10px">Reolink and Dahua are trademarks of their respective owners. PTZLite is independent and not affiliated with or endorsed by either company. Full terms are in <code>LICENSE.txt</code> in the install folder.</p>
   </div>
 
   <p class="version-tag" id="ver-tag"></p>

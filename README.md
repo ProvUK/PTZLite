@@ -12,6 +12,9 @@ PTZLite runs quietly in your system tray and shows all your cameras in one low-l
 
 Video is handled by the excellent [go2rtc](https://github.com/AlexxIT/go2rtc) (RTSP → WebRTC/MSE, no transcoding), and the viewer is a web page, so you can open it from the PC app window **or** from any phone, tablet or browser on your network.
 
+> ⚠️ **Use at your own risk.** PTZLite is a viewing and control tool, not a security or alarm system.
+> It comes with no warranty. See [Disclaimer](#disclaimer).
+
 ## Contents
 
 - [Features](#features)
@@ -32,6 +35,8 @@ Video is handled by the excellent [go2rtc](https://github.com/AlexxIT/go2rtc) (R
 - [Troubleshooting](#troubleshooting)
 - [Development](#development)
 - [Credits](#credits)
+- [Disclaimer](#disclaimer)
+- [License](#license)
 
 ---
 
@@ -340,8 +345,25 @@ by `build.bat`. Releases are tagged `v<version>` on GitHub.
 - [FastAPI](https://fastapi.tiangolo.com/), [Uvicorn](https://www.uvicorn.org/), [aiohttp](https://docs.aiohttp.org/),
   [pystray](https://github.com/moses-palmer/pystray), [Pillow](https://python-pillow.org/)
 
-Reolink and Dahua are trademarks of their respective owners. PTZLite is an independent project and is
-not affiliated with or endorsed by either company.
+## Disclaimer
+
+**PTZLite is provided "as is", without warranty of any kind, and is used entirely at your own risk.**
+
+- It is a camera **viewing and control** tool. It is **not** a security system, alarm, monitoring
+  service or recorder, and must not be relied on to protect people or property.
+- Live video, detection alerts and camera commands (movement, lights, siren) can be **delayed,
+  inaccurate, missed or fail**, whether from network problems, camera firmware or bugs in PTZLite.
+- **You are responsible** for your cameras, their passwords, your network and who can reach
+  PTZLite, and for following any laws about recording or monitoring people and places. Never expose
+  it directly to the internet.
+- Controlling a camera changes its behaviour and settings; you do so at your own risk.
+- To the fullest extent permitted by law, the author accepts **no liability** for any loss or
+  damage arising from using PTZLite.
+- Reolink and Dahua are trademarks of their respective owners. PTZLite is an independent project
+  and is **not affiliated with, endorsed or supported by** either company.
+
+The installer shows these terms, and you must accept them before installing. The full text is in
+[LICENSE](LICENSE).
 
 ## License
 
