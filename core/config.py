@@ -1,6 +1,6 @@
 #
-# Version: 1.5
-# Updated: 2026-10-11
+# Version: 1.6
+# Updated: 2026-10-12
 #
 # v1.0 - 2026-05-18 - Initial extraction from ptzlite.py monolith
 # v1.1 - 2026-05-23 - Add reversible improved PTZ aim calibration fields
@@ -9,6 +9,7 @@
 # v1.4 - 2026-05-23 - Add per-axis acceleration deadtime (pan_lead_s/tilt_lead_s) for auto-cal
 # v1.5 - 2026-10-11 - Retire lead / legacy-aim fields; strip them from config on load;
 #                     preserve cameras that fail validation instead of erasing them on save
+# v1.6 - 2026-10-12 - Add zoom_max_x (optical zoom for zoom-aware click-to-centre)
 #
 
 import logging
@@ -47,6 +48,7 @@ class CameraConfig(BaseModel):
     ptz_min_move_s: float = 0.1
     fov_h: float = 90.0
     fov_v: float = 55.0
+    zoom_max_x: float = 1.0   # optical zoom at full zoom-in (1 = don't adjust aim for zoom)
     zoom_step_s: float = 0.3
     zoom_speed: int = 40
     pan_invert: bool = False

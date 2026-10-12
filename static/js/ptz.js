@@ -1,9 +1,10 @@
 //
-// Version: 1.1
-// Updated: 2026-10-11
+// Version: 1.2
+// Updated: 2026-10-12
 //
 // v1.0 - 2026-10-11 - Split out of index.html: PTZ joystick and click-to-centre
 // v1.1 - 2026-10-11 - Double-click to centre (was single click); single click is inert
+// v1.2 - 2026-10-12 - Aim from the picture (letterbox + digital zoom aware); queue a click made mid-move
 //
 // Loaded as a classic script (shared global scope) in the order listed in
 // index.html. Don't convert to an ES module without resolving globals.
@@ -162,26 +163,50 @@ function showRipple(overlay, x, y) {
   r.addEventListener('animationend', () => r.remove(), { once: true });
 }
 
-const _ptzBusy = {};  // camId → bool; true while a click-to-centre move is in flight
+// Where a click lands on the camera's actual picture, as 0..1 across the image.
+// The tile is the wrong ruler: the video is letterboxed inside it (object-fit:
+// contain) and may be digitally zoomed (a CSS transform on video-rtc, which the
+// video's bounding box includes). Returns null for a click on the black bars.
+function _picturePoint(e, overlay) {
+  const vid = overlay.closest('.cam-wrap')?.querySelector('video-rtc video');
+  const r = (vid || overlay).getBoundingClientRect();
+  let left = r.left, top = r.top, w = r.width, h = r.height;
+  if (vid && vid.videoWidth && vid.videoHeight && getComputedStyle(vid).objectFit === 'contain') {
+    const s = Math.min(w / vid.videoWidth, h / vid.videoHeight);
+    const cw = vid.videoWidth * s, ch = vid.videoHeight * s;
+    left += (w - cw) / 2; top += (h - ch) / 2; w = cw; h = ch;
+  }
+  const x = (e.clientX - left) / w, y = (e.clientY - top) / h;
+  return (x < 0 || x > 1 || y < 0 || y > 1) ? null : { x, y };
+}
+
+const _ptzBusy    = {};  // camId → true while a click-to-centre move is in flight
+const _ptzPending = {};  // camId → {x, y} clicked during a move; sent when it finishes
 
 async function handlePtzClick(e, overlay, camId) {
-  const rect = overlay.getBoundingClientRect();
-  const x = (e.clientX - rect.left) / rect.width;
-  const y = (e.clientY - rect.top)  / rect.height;
+  const or = overlay.getBoundingClientRect();
+  const rx = (e.clientX - or.left) / or.width;    // ripple position on the tile
+  const ry = (e.clientY - or.top)  / or.height;
+  const pt = _picturePoint(e, overlay);
+  if (!pt) return;                                 // black bar — not on the picture
 
   // In calibration mode, clicks drive the guided two-click flow instead of a move
-  if (_calib[camId]) { handleCalibClick(camId, overlay, x, y); return; }
+  if (_calib[camId]) { handleCalibClick(camId, overlay, pt.x, pt.y, rx, ry); return; }
 
-  if (_ptzBusy[camId]) return;   // ignore all clicks until current move completes
+  showRipple(overlay, rx, ry);
+  if (_ptzBusy[camId]) { _ptzPending[camId] = pt; return; }   // latest click wins
   _ptzBusy[camId] = true;
-  showRipple(overlay, x, y);
   try {
-    await fetch(`/ptz/${camId}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ x, y }),
-    });
-  } catch (err) { console.error('PTZ error:', err); }
-  finally { _ptzBusy[camId] = false; }
+    for (let next = pt; next; next = _ptzPending[camId]) {
+      delete _ptzPending[camId];
+      try {
+        await fetch(`/ptz/${camId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(next),
+        });
+      } catch (err) { console.error('PTZ error:', err); }
+    }
+  } finally { _ptzBusy[camId] = false; }
 }
 

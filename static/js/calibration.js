@@ -1,8 +1,9 @@
 //
-// Version: 1.0
-// Updated: 2026-10-11
+// Version: 1.1
+// Updated: 2026-10-12
 //
 // v1.0 - 2026-10-11 - Split out of index.html: Manual and automatic click-to-centre calibration
+// v1.1 - 2026-10-12 - Zoom calibration messages; auto-cal uses the zoom-aware FOV; ripple on tile coords
 //
 // Loaded as a classic script (shared global scope) in the order listed in
 // index.html. Don't convert to an ES module without resolving globals.
@@ -66,10 +67,11 @@ function _setCalibMsg(camId, text, busy) {
   b.classList.toggle('busy', !!busy);
 }
 
-async function handleCalibClick(camId, overlay, x, y) {
+// x, y: position on the picture (what the server aims with); rx, ry: on the tile (ripple)
+async function handleCalibClick(camId, overlay, x, y, rx = x, ry = y) {
   const cal = _calib[camId];
   if (!cal || cal.phase === 'moving' || cal.phase === 'saving') return;
-  showRipple(overlay, x, y);
+  showRipple(overlay, rx, ry);
 
   if (cal.phase === 'before') {
     cal.before = { x, y };
@@ -111,8 +113,12 @@ function _calibResultText(res) {
   if (!res || res.ok === false) {
     return 'Calibration failed — click a fixed edge object to try again.';
   }
+  if (res.zoom_partial) {
+    return 'Camera is part-zoomed — zoom fully out (aim) or fully in (zoom), then try again.';
+  }
   if (res.updated && res.updated.length) {
-    const parts = res.updated.map(u => `${u.axis} ${u.old}→${u.new}`);
+    const parts = res.updated.map(u => u.axis === 'zoom' ? `zoom ${u.old}×→${u.new}×`
+                                                         : `${u.axis} ${u.old}→${u.new}`);
     const off = Math.round(Math.max(...res.updated.map(u => Math.abs(u.residual))) * 100);
     return `Saved ${parts.join(', ')} · landed ${off}% off centre. `
          + 'Click an edge object to refine, or Done.';
@@ -372,12 +378,11 @@ async function startAutoCalibration(cam, wrap) {
   const state = { cancel: false };
   _autoCal[camId] = state;
 
-  // FOV isn't in the lightweight /cameras payload — pull the full record.
+  // Field of view right now — narrower when optically zoomed in.
   let fovH = 90, fovV = 55;
   try {
-    const all = await fetch('/api/cameras').then(r => r.json());
-    const full = all.find(c => c.id === camId);
-    if (full) { fovH = full.fov_h || 90; fovV = full.fov_v || 55; }
+    const aim = await fetch(`/ptz/${camId}/aim`).then(r => r.json());
+    if (aim.fov_h) { fovH = aim.fov_h; fovV = aim.fov_v; }
   } catch (e) { /* fall back to defaults */ }
 
   const out = [];

@@ -1,6 +1,6 @@
 #
-# Version: 2.4
-# Updated: 2026-10-11
+# Version: 2.5
+# Updated: 2026-10-12
 #
 # v1.0 - 2026-05-18 - Initial extraction from ptzlite.py monolith
 # v1.1 - 2026-05-19 - Fix camera keeps moving: send stop before timed click-to-move (Reolink + ONVIF)
@@ -17,11 +17,14 @@
 # v2.2 - 2026-10-11 - Detection moved to api/detect.py (server-side batched poller + SSE)
 # v2.3 - 2026-10-11 - Remove dead lead / legacy-aim code paths
 # v2.4 - 2026-10-11 - Save preset picks the next free slot when no id is given
+# v2.5 - 2026-10-12 - Click-to-centre: zoom-aware aim (zoom_max_x + live zoom read),
+#                     pan+tilt move together, zoom calibration, /ptz/{id}/aim
 #
 
 import asyncio
 import logging
 import math
+import time
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -32,6 +35,7 @@ from services.ptz.dahua import _dahua_get_position, _dahua_position_abs, _dahua_
 from services.ptz.onvif import (
     _onvif_continuous,
     _onvif_get_presets,
+    _onvif_get_zoom,
     _onvif_goto_preset,
     _onvif_stop,
 )
@@ -108,14 +112,82 @@ class SavePresetPayload(BaseModel):
     name: str = ""
 
 
-def _screen_delta_to_angles(cam: dict, dx: float, dy: float) -> tuple[float, float]:
-    """Convert normalised screen delta to pan/tilt degrees."""
+def _screen_delta_to_angles(cam: dict, dx: float, dy: float, mag: float = 1.0) -> tuple[float, float]:
+    """Convert normalised screen delta to pan/tilt degrees.
+
+    `mag` is the current optical magnification (1 = fully zoomed out): zooming
+    in narrows the field of view, so the same screen distance is a smaller angle.
+    """
     fov_h = float(cam.get("fov_h", 90))
     fov_v = float(cam.get("fov_v", 55))
 
-    pan = math.degrees(math.atan(dx * math.tan(math.radians(fov_h) / 2)))
-    tilt = -math.degrees(math.atan(dy * math.tan(math.radians(fov_v) / 2)))
+    pan = math.degrees(math.atan(dx * math.tan(math.radians(fov_h) / 2) / mag))
+    tilt = -math.degrees(math.atan(dy * math.tan(math.radians(fov_v) / 2) / mag))
     return pan, tilt
+
+
+# ── Optical zoom ──────────────────────────────────────────────────────────────
+# Detected per camera at runtime: Reolink reports its zoom motor position via
+# GetZoomFocus, ONVIF cameras via GetStatus. `zoom_max_x` (the camera's optical
+# zoom at full zoom-in, e.g. 4 for a 4x lens) is entered in Settings and refined
+# by running Manual calibration while fully zoomed in. 1 = don't adjust for zoom.
+
+_ZOOM_RETRY_S = 600.0
+_zoom_unsupported: dict[str, float] = {}   # cam id -> when its zoom read last failed
+
+
+def _zoom_max_x(cam: dict) -> float:
+    return max(1.0, min(60.0, float(cam.get("zoom_max_x", 1.0) or 1.0)))
+
+
+def _zoom_mag(cam: dict, frac: float | None) -> float:
+    """Magnification at zoom fraction `frac` (0 = wide, 1 = full zoom).
+
+    Assumes focal length is roughly linear in the zoom motor position, which
+    is close for typical PTZ zoom lenses; calibration at full zoom pins the end.
+    """
+    if frac is None:
+        return 1.0
+    return 1.0 + (_zoom_max_x(cam) - 1.0) * frac
+
+
+async def _zoom_fraction(cam: dict) -> float | None:
+    """Current optical zoom as 0 (wide) .. 1 (full), or None if unknown."""
+    failed = _zoom_unsupported.get(cam["id"])
+    if failed and time.monotonic() - failed < _ZOOM_RETRY_S:
+        return None
+    pc = _ptz_cam(cam)
+    frac = None
+    try:
+        if _is_onvif(cam):
+            frac = await _onvif_get_zoom(pc)
+        else:
+            data = await _nvr_call(pc, "GetZoomFocus", [{"cmd": "GetZoomFocus", "action": 1,
+                "param": {"channel": pc.get("channel", 0)}}], timeout=3)
+            if data[0].get("code", -1) == 0:
+                pos = data[0]["value"]["ZoomFocus"]["zoom"]["pos"]
+                rng = data[0]["range"]["ZoomFocus"]["zoom"]["pos"]
+                span = rng["max"] - rng["min"]
+                if span > 0:
+                    frac = (pos - rng["min"]) / span
+    except Exception as e:
+        logger.debug("Zoom read %s unavailable: %s", cam["id"], e)
+    if frac is None:
+        _zoom_unsupported[cam["id"]] = time.monotonic()
+        return None
+    _zoom_unsupported.pop(cam["id"], None)
+    return max(0.0, min(1.0, float(frac)))
+
+
+async def _current_mag(cam: dict) -> float:
+    """Current magnification; skips the zoom read when no zoom is configured."""
+    if _zoom_max_x(cam) <= 1.0:
+        return 1.0
+    return _zoom_mag(cam, await _zoom_fraction(cam))
+
+
+async def _sleep_until(deadline: float) -> None:
+    await asyncio.sleep(max(0.0, deadline - time.monotonic()))
 
 
 def _axis_dps(cam: dict, axis: str) -> float:
@@ -174,7 +246,8 @@ async def ptz_click(cam_id: str, click: ClickPayload):
     fov_h = cam.get("fov_h", 90)
     fov_v = cam.get("fov_v", 55)
 
-    want_pan, want_tilt = _screen_delta_to_angles(cam, dx, dy)
+    mag = await _current_mag(cam)
+    want_pan, want_tilt = _screen_delta_to_angles(cam, dx, dy, mag)
 
     pc = _ptz_cam(cam)
 
@@ -206,33 +279,39 @@ async def ptz_click(cam_id: str, click: ClickPayload):
         # for network + mechanical brake latency.
         ONVIF_STOP_LEAD_S = cam.get("onvif_stop_lead", 0.12)
         max_spd = cam.get("ptz_speed", 40) / 63.0
-        async def _onvif_timed_axis(pan_v: float, tilt_v: float, degrees: float, axis: str):
+
+        def _onvif_axis(degrees: float, axis: str) -> tuple[float, float]:
+            """(signed velocity, motor-on seconds) for one axis, or (0, 0) if no move."""
+            if abs(degrees) <= 0.5:
+                return 0.0, 0.0
             axis_fov = fov_h if axis == "pan" else fov_v
-            magnitude = min(1.0, degrees / (axis_fov / 2))
+            magnitude = min(1.0, abs(degrees) / (axis_fov / 2))
             spd = max(0.2, min(1.0, magnitude)) * max_spd
             duration_s = max(_min_move_s(cam),
-                             _move_duration(cam, axis, degrees) - ONVIF_STOP_LEAD_S)
-            logger.debug(
-                "  ONVIF timed: pan_v=%.2f tilt_v=%.2f spd=%.2f dur=%.2fs deg=%.1f°",
-                pan_v, tilt_v, spd, duration_s, degrees,
-            )
-            await _onvif_continuous(pc, pan=pan_v * spd, tilt=tilt_v * spd)
-            await asyncio.sleep(duration_s)
-            await _onvif_stop(pc)
+                             _move_duration(cam, axis, abs(degrees)) - ONVIF_STOP_LEAD_S)
+            return math.copysign(spd, degrees), duration_s
 
+        pan_v, pan_s = _onvif_axis(want_pan, "pan")
+        tilt_v, tilt_s = _onvif_axis(want_tilt, "tilt")
         logger.info(
-            "PTZ ONVIF %s: click=(%.2f,%.2f) pan=%.1f° tilt=%.1f°",
-            cam["id"], click.x, click.y, want_pan, want_tilt,
+            "PTZ ONVIF %s: click=(%.2f,%.2f) zoom=%.2fx pan=%.1f° (%.2fs) tilt=%.1f° (%.2fs)",
+            cam["id"], click.x, click.y, mag, want_pan, pan_s, want_tilt, tilt_s,
         )
         # Stop first so any in-flight joystick /start commands don't outlive this move
         await _onvif_stop(pc)
-        if abs(want_pan) > 0.5:
-            await _onvif_timed_axis(1.0 if want_pan > 0 else -1.0, 0.0, abs(want_pan), "pan")
-        if abs(want_tilt) > 0.5:
-            await _onvif_timed_axis(0.0, 1.0 if want_tilt > 0 else -1.0, abs(want_tilt), "tilt")
+        if pan_s or tilt_s:
+            # Both axes run together; the shorter one drops out, the longer finishes.
+            await _onvif_continuous(pc, pan=pan_v, tilt=tilt_v)
+            t0 = time.monotonic()
+            if pan_s and tilt_s and pan_s != tilt_s:
+                await _sleep_until(t0 + min(pan_s, tilt_s))
+                if pan_s > tilt_s:
+                    await _onvif_continuous(pc, pan=pan_v)
+                else:
+                    await _onvif_continuous(pc, tilt=tilt_v)
+            await _sleep_until(t0 + max(pan_s, tilt_s))
+            await _onvif_stop(pc)
         return {"ok": True, "mode": "onvif_timed"}
-
-    ptz_speed = cam.get("ptz_speed", 20)
 
     sx = (1 if want_pan  > 0.5 else (-1 if want_pan  < -0.5 else 0))
     sy = (1 if want_tilt > 0.5 else (-1 if want_tilt < -0.5 else 0))
@@ -242,31 +321,48 @@ async def ptz_click(cam_id: str, click: ClickPayload):
     if sx == 0 and sy == 0:
         return {"ok": True, "note": "delta too small"}
 
-    pan_dir  = _DIR.get((sx,  0))
-    tilt_dir = _DIR.get(( 0, sy))
+    pan_s  = max(_min_move_s(cam), _move_duration(cam, "pan",  abs(want_pan)))  if sx else 0.0
+    tilt_s = max(_min_move_s(cam), _move_duration(cam, "tilt", abs(want_tilt))) if sy else 0.0
+    legs = _reolink_legs(sx, sy, pan_s, tilt_s)
 
     logger.info(
-        "PTZ %s: click=(%.2f,%.2f) want_pan=%.1f° want_tilt=%.1f° pan=%s tilt=%s",
-        cam["id"], click.x, click.y, want_pan, want_tilt, pan_dir, tilt_dir,
+        "PTZ %s: click=(%.2f,%.2f) zoom=%.2fx want_pan=%.1f° (%.2fs) want_tilt=%.1f° (%.2fs) legs=%s",
+        cam["id"], click.x, click.y, mag, want_pan, pan_s, want_tilt, tilt_s, legs,
     )
-
-    async def _timed_axis(op: str, degrees: float, axis: str):
-        duration_s = max(_min_move_s(cam), _move_duration(cam, axis, degrees))
-        resp = await _nvr_call(pc, "PtzCtrl", [{"cmd": "PtzCtrl", "action": 0, "param": {
-            "channel": pc.get("channel", 0), "op": op, "speed": ptz_speed, "timeout": 0,
-        }}])
-        logger.info("  PtzCtrl %s (%.2fs): %s", op, duration_s, resp)
-        await asyncio.sleep(duration_s)
-        await _ptz_stop(pc)
 
     # Stop first so any in-flight joystick /start commands don't outlive this move
     await _ptz_stop(pc)
-    if pan_dir:
-        await _timed_axis(pan_dir, abs(want_pan), "pan")
-    if tilt_dir:
-        await _timed_axis(tilt_dir, abs(want_tilt), "tilt")
+    t0 = None
+    for op, until in legs:
+        await _nvr_call(pc, "PtzCtrl", [{"cmd": "PtzCtrl", "action": 0, "param": {
+            "channel": pc.get("channel", 0), "op": op, "speed": cam.get("ptz_speed", 20), "timeout": 0,
+        }}])
+        if t0 is None:
+            t0 = time.monotonic()   # times are measured from when the move started
+        await _sleep_until(t0 + until)
+    await _ptz_stop(pc)
 
     return {"ok": True, "mode": "timed"}
+
+
+def _reolink_legs(sx: int, sy: int, pan_s: float, tilt_s: float) -> list[tuple[str, float]]:
+    """Plan a timed Reolink move as [(op, run-until seconds), ...].
+
+    Pan and tilt run together (a diagonal op) until the shorter axis has had its
+    time, then the longer axis carries on alone. Each axis gets exactly the same
+    motor-on time it would get moving on its own, so calibration still applies.
+    """
+    if sx and sy:
+        both = min(pan_s, tilt_s)
+        legs = [(_DIR[(sx, sy)], both)]
+        if pan_s > both:
+            legs.append((_DIR[(sx, 0)], pan_s))
+        elif tilt_s > both:
+            legs.append((_DIR[(0, sy)], tilt_s))
+        return legs
+    if sx:
+        return [(_DIR[(sx, 0)], pan_s)]
+    return [(_DIR[(0, sy)], tilt_s)]
 
 
 @router.post("/ptz/{cam_id}/start")
@@ -349,6 +445,15 @@ async def ptz_calibrate(cam_id: str, payload: CalibratePayload):
     MIN_TRAVEL = 0.12   # ignore axes the target barely moved along (too noisy)
     result: dict = {"ok": True, "updated": []}
 
+    # Zoomed in: the miss is down to the zoom figure, not the motor — refine
+    # zoom_max_x instead of the per-axis gains (which are measured zoomed out).
+    frac = await _zoom_fraction(cam)
+    if frac is not None and frac >= 0.5:
+        return _calibrate_zoom(cam, frac, ((bx, ax), (by, ay)), MIN_TRAVEL)
+    if frac is not None and frac > 0.15:
+        result["zoom_partial"] = True   # part-zoomed: neither measurement is clean
+        return result
+
     for axis, b, a in (("pan", bx, ax), ("tilt", by, ay)):
         if abs(b) < MIN_TRAVEL:
             continue
@@ -373,6 +478,50 @@ async def ptz_calibrate(cam_id: str, payload: CalibratePayload):
         logger.info("Calibrate %s: %s", cam_id, result["updated"])
 
     return result
+
+
+def _calibrate_zoom(cam: dict, frac: float, samples, min_travel: float) -> dict:
+    """Refine zoom_max_x from one measured move made while zoomed in.
+
+    With the motor calibrated, the fraction of the intended screen distance the
+    target actually travelled equals true ÷ assumed magnification, so the new
+    magnification is simply old × moved fraction (averaged over both axes).
+    """
+    fracs, residual = [], 0.0
+    for b, a in samples:
+        if abs(b) < min_travel:
+            continue
+        moved = (b - a) / b
+        if 0.1 <= moved <= 30.0:     # wrong direction or a wild misclick is ignored
+            fracs.append(moved)
+            residual = max(residual, abs(a))
+    if not fracs:
+        return {"ok": True, "updated": []}
+    moved = math.prod(fracs) ** (1 / len(fracs))
+    old_x = _zoom_max_x(cam)
+    new_mag = max(1.0, _zoom_mag(cam, frac) * moved)
+    new_x = max(1.0, min(60.0, 1.0 + (new_mag - 1.0) / frac))
+    cam["zoom_max_x"] = round(new_x, 3)
+    _save_config()
+    logger.info("Calibrate %s zoom: %.3fx -> %.3fx (at %.0f%% zoom)", cam["id"], old_x, new_x, frac * 100)
+    return {"ok": True, "updated": [{"axis": "zoom", "old": round(old_x, 3),
+                                     "new": round(new_x, 3), "residual": round(residual, 4)}]}
+
+
+@router.get("/ptz/{cam_id}/aim")
+async def ptz_aim_info(cam_id: str):
+    """Field of view right now, allowing for optical zoom (used by auto-calibration)."""
+    cam = cameras.get(cam_id)
+    if not cam or not cam.get("ptz"):
+        raise HTTPException(404, "Camera not found or not PTZ")
+    frac = await _zoom_fraction(cam)
+    mag = _zoom_mag(cam, frac)
+
+    def eff(fov: float) -> float:
+        return math.degrees(2 * math.atan(math.tan(math.radians(fov) / 2) / mag))
+    return {"fov_h": round(eff(float(cam.get("fov_h", 90))), 3),
+            "fov_v": round(eff(float(cam.get("fov_v", 55))), 3),
+            "zoom": None if frac is None else round(frac, 3), "mag": round(mag, 3)}
 
 
 @router.post("/ptz/{cam_id}/raw_move")

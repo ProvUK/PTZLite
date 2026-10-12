@@ -1,9 +1,10 @@
 #
-# Version: 1.1
-# Updated: 2026-10-11
+# Version: 1.2
+# Updated: 2026-10-12
 #
 # v1.0 - 2026-05-18 - Initial extraction from ptzlite.py monolith
 # v1.1 - 2026-10-11 - Use shared pooled HTTP session; retry once on stale keep-alive
+# v1.2 - 2026-10-12 - Add _onvif_get_zoom (zoom-aware click-to-centre)
 #
 
 # ── ONVIF PTZ (Dahua / Hikvision / generic ONVIF cameras) ─────────────────────
@@ -144,6 +145,25 @@ async def _onvif_get_status(cam: dict) -> tuple[float, float] | None:
             return (float(pt.get("x", "0")), float(pt.get("y", "0")))
     except Exception as e:
         logger.error("ONVIF GetStatus error: %s", e)
+    return None
+
+
+async def _onvif_get_zoom(cam: dict) -> float | None:
+    """Current zoom from GetStatus (generic space: 0 = wide .. 1 = full), or None."""
+    body = (
+        f"<tptz:GetStatus>"
+        f"<tptz:ProfileToken>{_onvif_profile(cam)}</tptz:ProfileToken>"
+        f"</tptz:GetStatus>"
+    )
+    try:
+        xml_text = await _onvif_post(cam, "GetStatus", body, timeout=3.0)
+        root = ET.fromstring(xml_text)
+        NS = "http://www.onvif.org/ver10/schema"
+        for z in root.iter(f"{{{NS}}}Zoom"):
+            if z.get("x") is not None:
+                return float(z.get("x"))
+    except Exception as e:
+        logger.debug("ONVIF zoom status unavailable: %s", e)
     return None
 
 

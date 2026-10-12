@@ -1,11 +1,12 @@
 #
-# Version: 1.3
-# Updated: 2026-10-11
+# Version: 1.4
+# Updated: 2026-10-12
 #
 # v1.0 - 2026-10-11 - RTSP URL builders and PTZ move maths
 # v1.1 - 2026-10-11 - Pre-warm mode tests
 # v1.2 - 2026-10-11 - Config load: invalid cameras preserved, retired keys stripped
 # v1.3 - 2026-10-11 - Next free preset slot; readable camera errors
+# v1.4 - 2026-10-12 - Zoom-aware aim, combined pan+tilt move, zoom calibration
 #
 import math
 
@@ -60,6 +61,67 @@ def test_move_duration_is_proportional_and_trimmed_by_gain():
     cam = {"pan_degrees_per_second": 20.0, "pan_cal": 1.0}
     assert _move_duration(cam, "pan", 10) == pytest.approx(0.5)
     assert _move_duration({**cam, "pan_cal": 1.2}, "pan", 10) == pytest.approx(0.6)
+
+
+def test_zoom_narrows_the_click_angle():
+    from api.ptz import _screen_delta_to_angles, _zoom_mag
+    cam = {"fov_h": 90, "fov_v": 60, "zoom_max_x": 5}
+    assert _zoom_mag(cam, None) == 1.0 and _zoom_mag(cam, 0.5) == pytest.approx(3.0)
+    pan, _ = _screen_delta_to_angles(cam, 1.0, 0.0, mag=2.0)
+    assert pan == pytest.approx(math.degrees(math.atan(0.5)))   # edge of a 2x view
+
+
+def test_reolink_move_runs_both_axes_then_the_longer():
+    from api.ptz import _reolink_legs
+    assert _reolink_legs(1, 1, 0.8, 0.3) == [("RightUp", 0.3), ("Right", 0.8)]
+    assert _reolink_legs(-1, -1, 0.2, 0.5) == [("LeftDown", 0.2), ("Down", 0.5)]
+    assert _reolink_legs(1, 1, 0.4, 0.4) == [("RightUp", 0.4)]
+    assert _reolink_legs(0, -1, 0.0, 0.5) == [("Down", 0.5)]
+
+
+def test_click_sends_diagonal_then_stop(client, monkeypatch):
+    import api.ptz
+    sent = []
+
+    async def fake_call(pc, cmd, payload, timeout=8):
+        sent.append(payload[0]["param"].get("op"))
+        return [{"code": 0}]
+
+    async def fake_stop(pc):
+        sent.append("Stop")
+    monkeypatch.setattr(api.ptz, "_nvr_call", fake_call)
+    monkeypatch.setattr(api.ptz, "_ptz_stop", fake_stop)
+    api.ptz.cameras["front_right"].update(pan_degrees_per_second=900, tilt_degrees_per_second=900,
+                                          ptz_min_move_s=0.01)
+    assert client.post("/ptz/front_right", json={"x": 0.95, "y": 0.6}).status_code == 200
+    assert sent == ["Stop", "RightDown", "Right", "Stop"]
+
+
+def test_calibrate_when_zoomed_in_tunes_zoom_not_aim(client, monkeypatch):
+    import api.ptz
+
+    async def full_zoom(cam):
+        return 1.0
+    monkeypatch.setattr(api.ptz, "_zoom_fraction", full_zoom)
+    cam = api.ptz.cameras["front_right"]
+    cam["zoom_max_x"] = 4
+    # target 80% right of centre; after the move it sits 40% left => moved 1.5x too far
+    r = client.post("/ptz/front_right/calibrate",
+                    json={"before": {"x": 0.9, "y": 0.5}, "after": {"x": 0.3, "y": 0.5}}).json()
+    assert r["updated"][0]["axis"] == "zoom"
+    assert api.ptz.cameras["front_right"]["zoom_max_x"] == pytest.approx(6.0)
+    assert api.ptz.cameras["front_right"].get("pan_cal", 1.0) == 1.0
+
+
+def test_calibrate_part_zoomed_changes_nothing(client, monkeypatch):
+    import api.ptz
+
+    async def half(cam):
+        return 0.3
+    monkeypatch.setattr(api.ptz, "_zoom_fraction", half)
+    r = client.post("/ptz/front_right/calibrate",
+                    json={"before": {"x": 0.9, "y": 0.5}, "after": {"x": 0.3, "y": 0.5}}).json()
+    assert r["zoom_partial"] and r["updated"] == []
 
 
 def test_move_duration_falls_back_to_shared_speed():

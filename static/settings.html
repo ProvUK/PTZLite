@@ -531,6 +531,11 @@
               <input type="number" id="f-tilt-dps" value="" min="1" max="360" placeholder="same as rotation">
               <span class="field-hint">Optional override for vertical click-to-centre timing.</span>
             </div>
+            <div class="field">
+              <label for="f-zoom-max">Optical zoom (×)</label>
+              <input type="number" id="f-zoom-max" value="1" min="1" max="60" step="0.1">
+              <span class="field-hint">The camera's optical zoom from its spec, e.g. 4 for a 4× camera, so aiming stays accurate when zoomed in. 1 = no adjustment. Fine-tune it by running Manual calibration while fully zoomed in.</span>
+            </div>
           </div>
           <div class="form-row single">
             <div class="field">
@@ -666,6 +671,7 @@ function clearForm() {
   v('f-dps').value = '20';
   v('f-pan-dps').value = '';
   v('f-tilt-dps').value = '';
+  v('f-zoom-max').value = '1';
   v('f-min-move').value = '0.1';
   v('f-monitor-preset').value = '';
   v('f-pan-invert').checked = false;
@@ -695,6 +701,7 @@ function fillForm(cam) {
   v('f-dps').value = cam.ptz_degrees_per_second ?? 20;
   v('f-pan-dps').value = cam.pan_degrees_per_second ?? '';
   v('f-tilt-dps').value = cam.tilt_degrees_per_second ?? '';
+  v('f-zoom-max').value = cam.zoom_max_x ?? 1;
   v('f-min-move').value = cam.ptz_min_move_s ?? 0.1;
   v('f-monitor-preset').value = cam.monitor_preset != null ? cam.monitor_preset : '';
   v('f-pan-invert').checked = !!cam.pan_invert;
@@ -732,6 +739,7 @@ function formData() {
     d.ptz_degrees_per_second = parseFloat(v('f-dps').value) || 20;
     d.pan_degrees_per_second = v('f-pan-dps').value !== '' ? parseFloat(v('f-pan-dps').value) : null;
     d.tilt_degrees_per_second = v('f-tilt-dps').value !== '' ? parseFloat(v('f-tilt-dps').value) : null;
+    d.zoom_max_x = Math.max(1, Math.min(60, parseFloat(v('f-zoom-max').value) || 1));
     d.ptz_min_move_s = parseFloat(v('f-min-move').value) || 0;
     d.monitor_preset = monPreset !== '' ? parseInt(monPreset) : null;
     d.pan_invert  = v('f-pan-invert').checked;
