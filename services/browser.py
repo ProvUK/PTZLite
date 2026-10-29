@@ -1,9 +1,10 @@
 #
-# Version: 1.1
-# Updated: 2026-10-11
+# Version: 1.2
+# Updated: 2026-10-29
 #
 # v1.0 - 2026-05-21 - Browser detection and app-window launcher extracted from ptzlite.py
 # v1.1 - 2026-10-11 - Launch URL carries a build stamp so a stale cached page is never reused
+# v1.2 - 2026-10-29 - Open 127.0.0.1 not localhost (another app on [::]:8765 hijacked the window)
 #
 
 import logging
@@ -53,7 +54,9 @@ def open_viewer(port: int) -> None:
         stamp = int((_STATIC_DIR / "index.html").stat().st_mtime)
     except OSError:
         stamp = 0
-    url = f"http://localhost:{port}/?v={stamp}"
+    # 127.0.0.1, not "localhost": Windows tries IPv6 (::1) first for localhost, so any
+    # other program listening on [::]:port would answer instead of PTZLite.
+    url = f"http://127.0.0.1:{port}/?v={stamp}"
     if _config.get("app_window", False):
         browser = find_app_browser()
         if browser:

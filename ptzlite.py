@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-# Version: 5.45
-# Updated: 2026-10-12
+# Version: 5.46
+# Updated: 2026-10-29
 # v1.0 - 2026-04-28 - Initial stable release: go2rtc streaming, PTZ click-to-centre,
 #                     sequential pan+tilt, optical zoom, presets, serialized NVR API
 # v1.1 - 2026-04-28 - Add camera management API (GET/POST/PUT/DELETE /api/cameras)
@@ -164,6 +164,8 @@
 # v5.43 - 2026-10-11 - Cache-Control: no-cache for html/js/css (viewer split into static/js + css)
 # v5.44 - 2026-10-11 - Login redirect carries ?next= so you return to the page you asked for
 # v5.45 - 2026-10-12 - Setup notes point at README; app version now lives only in core/paths.py
+# v5.46 - 2026-10-29 - Port clash handling: use 127.0.0.1 (not localhost); detect other programs on
+#                      the port at startup (tray warning; second PTZLite just opens the viewer)
 """
 Reolink camera viewer with click-to-pan PTZ control.
 
@@ -299,17 +301,56 @@ def _make_tray_icon():
 
 
 
+def _port_listeners(port: int) -> list[tuple[str, int, str]]:
+    """Programs already listening on `port`, as (local address, pid, exe name). Windows only.
+
+    Another app can hold the IPv6 side ([::]:port) while PTZLite still binds IPv4
+    without any error, so a clash would otherwise go unnoticed.
+    """
+    if sys.platform != "win32":
+        return []
+    import subprocess
+    no_window = subprocess.CREATE_NO_WINDOW
+    try:
+        out = subprocess.run(["netstat", "-ano", "-p", "TCP"], capture_output=True, text=True,
+                             timeout=5, creationflags=no_window).stdout
+        out += subprocess.run(["netstat", "-ano", "-p", "TCPv6"], capture_output=True, text=True,
+                              timeout=5, creationflags=no_window).stdout
+    except Exception:
+        return []
+    found = []
+    for line in out.splitlines():
+        parts = line.split()
+        if len(parts) >= 5 and parts[3] == "LISTENING" and parts[1].endswith(f":{port}"):
+            pid = int(parts[4])
+            try:
+                row = subprocess.run(["tasklist", "/FI", f"PID eq {pid}", "/FO", "CSV", "/NH"],
+                                     capture_output=True, text=True, timeout=5,
+                                     creationflags=no_window).stdout.strip()
+                name = row.split('","')[0].strip('"') if row.startswith('"') else f"PID {pid}"
+            except Exception:
+                name = f"PID {pid}"
+            found.append((parts[1].rsplit(":", 1)[0], pid, name))
+    return found
+
+
 def _wait_for_server(port: int, timeout: float = 15.0) -> bool:
-    # Poll an auth-exempt endpoint — /cameras returns 401 when password is set,
-    # which urlopen raises as HTTPError (caught as Exception), causing the old
-    # code to wait the full 15-second timeout before opening the browser.
+    """True once PTZLite itself answers on 127.0.0.1:port.
+
+    Polls an auth-exempt endpoint (/cameras returns 401 when a password is set).
+    Checks the reply is PTZLite's own JSON, so a different program on the same
+    port doesn't count as "up".
+    """
+    import json
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         try:
-            urllib.request.urlopen(f"http://localhost:{port}/api/auth/status", timeout=1)
-            return True
+            with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/auth/status", timeout=1) as r:
+                if "enabled" in json.loads(r.read()):
+                    return True
         except Exception:
-            time.sleep(0.25)
+            pass
+        time.sleep(0.25)
     return False
 
 
@@ -399,14 +440,29 @@ def _start_hotkey_listener(port: int) -> None:
     threading.Thread(target=_listen, daemon=True, name="hotkey-listener").start()
 
 
-def _main_tray(port: int):
+def _main_tray(port: int, others: str | None = None):
+    import logging
     import pystray
+    logger = logging.getLogger("PTZLite.main")
 
     server = threading.Thread(target=_run_uvicorn, args=(port,), daemon=True)
     server.start()
-    _wait_for_server(port)
+    up = _wait_for_server(port)
     _start_hotkey_listener(port)
-    open_viewer(port)
+    warning = None
+    if up:
+        open_viewer(port)
+        if others:
+            # e.g. a dev server on [::]:port — harmless now we use 127.0.0.1, but worth knowing
+            warning = (f"Another program ({others}) is also using port {port}. PTZLite works, "
+                       f"but http://localhost:{port} may show that program instead.")
+            logger.warning(warning)
+    else:
+        # Don't open the window: it would show the other program (or nothing)
+        warning = (f"PTZLite couldn't start its viewer on port {port}"
+                   + (f": it's in use by {others}." if others else ".")
+                   + " Close that program, then start PTZLite again.")
+        logger.error(warning)
 
     icon_img = _make_tray_icon()
 
@@ -414,7 +470,7 @@ def _main_tray(port: int):
         open_viewer(port)
 
     def on_settings(_icon, _item):
-        webbrowser.open(f"http://localhost:{port}/settings.html")
+        webbrowser.open(f"http://127.0.0.1:{port}/settings.html")
 
     def on_exit(icon, _item):
         stop_go2rtc()
@@ -431,7 +487,15 @@ def _main_tray(port: int):
             pystray.MenuItem("Exit",         on_exit),
         ),
     )
-    tray.run()  # blocks until on_exit calls icon.stop()
+    def on_ready(icon):
+        icon.visible = True
+        if warning:
+            try:
+                icon.notify(warning, "PTZLite")
+            except Exception:
+                pass   # notifications are best-effort
+
+    tray.run(setup=on_ready)  # blocks until on_exit calls icon.stop()
 
 
 # ── Entry point ────────────────────────────────────────────────────────────────
@@ -460,13 +524,24 @@ def main():
         if arg in ("--port", "-p") and i + 2 < len(sys.argv):
             port = int(sys.argv[i + 2])
 
+    # Is anything already listening on our port?
+    import os
+    others = [l for l in _port_listeners(port) if l[1] != os.getpid()]
+    if any(name.lower() == "ptzlite.exe" for _, _, name in others):
+        logger.info("PTZLite is already running on port %d — opening its viewer instead", port)
+        open_viewer(port)
+        return
+    names = ", ".join(sorted({f"{name} (PID {pid})" for _, pid, name in others})) or None
+    if names:
+        logger.warning("Port %d is already in use by %s", port, names)
+
     try:
         start_go2rtc()
-        logger.info("Reolink viewer -> http://localhost:%d", port)
+        logger.info("Viewer -> http://127.0.0.1:%d", port)
         try:
             import pystray   # noqa: F401
             from PIL import Image  # noqa: F401
-            _main_tray(port)
+            _main_tray(port, names)
         except ImportError:
             # pystray / Pillow not installed -- fall back to visible console
             uvicorn.run(app, host="0.0.0.0", port=port, log_level="info")
